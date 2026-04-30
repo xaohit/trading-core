@@ -373,23 +373,25 @@ Backtest engine features:
 - **Agent Tool:** Added `inject_historical_experience` to `agent_tools.py`, allowing Hermes to "read the history books" before starting.
 - **Workflow:** The system can now turn raw historical data into actionable wisdom (e.g., "Crash bounce on BTC often fails in this volatility range").
 
-**Phase 8C: 24h Review & LLM Reflection**
-- **Gap:** Review is only at trade closure; no active "prediction vs reality" check.
-- **Plan:** 
-  1. 24h after decision, system checks actual price vs prediction.
-  2. On miss: Send context + result to Hermes.
-  3. Hermes generates reflection: "What did I miss? Why was Polymarket right? Next time..."
-  4. Archive lesson with tags.
+**Phase 8C: 24h Review & LLM Reflection (✅ Framework DONE)**
+- **Automated Routine:** Added `daily_reflection_routine()` to `agent_framework.py`. It automatically runs `review_due_decisions()`.
+- **LLM Handoff:** If a decision failed, it generates a specific `Reflection Prompt` containing the exact Market State and Macro Context, ready for Hermes to analyze.
 
-**Phase 8D: Contextual Experience Retrieval**
-- **Gap:** Current retrieval is based on simple tags.
-- **Plan:** Market State matching. 
-  - *Example:* If 4/15 failure was in a "Range" market, but 5/5 is a "Trend" market, the system knows to discount that old lesson.
+**Phase 8D: Contextual Experience Retrieval (✅ Framework DONE)**
+- **Smart Retrieval:** The `get_market_analysis` tool now automatically appends `relevant_experiences` based on the symbol and signal type.
+- **Market State Filtering:** The system classifies market into Trend/Range/Volatile (`market_state.py`) and includes this in the context, allowing the Agent to weigh experiences differently.
 
-**Phase 8E: Feedback Loop & Rule Adjustment**
-- **Gap:** Rule suggestions are generated but not auto-applied.
-- **Plan:** Hermes writes to `feedback.log`. Weekly stats: if "strict threshold" suggestions actually have >55% win rate, lower the bar automatically.
+**Phase 8E: Feedback Loop & Rule Adjustment (✅ Framework DONE)**
+- **Evolution Routine:** Added `weekly_evolution_routine()` to `agent_framework.py`. It analyzes recent wins/losses and triggers `evolve_rules()`.
+- **Self-Tuning:** This function is the place where Hermes can programmatically update thresholds (e.g., `min_entry_score`) based on statistical feedback.
 
 ## Current Next Step
-**Phase 8B: Backtest-to-Experience Injection.**
-Implement the pipeline that takes the results of `backtest.py`, analyzes key nodes, and populates the `experience_cases` table with "historical lessons" derived from the past.
+**Phase 9: Deployment & Tuning.**
+- The system is now structurally complete (Phases 1-8).
+- Hermes should run `inject_historical_experience` to build the base memory.
+- Start the Agent in simulation mode (`agent_framework.py`) to accumulate data.
+## Current Next Step
+**Phase 9: Deployment & Tuning.**
+- The system is now structurally complete (Phases 1-8).
+- Hermes should run `inject_historical_experience` to build the base memory.
+- Start the Agent in simulation mode (`agent_framework.py`) to accumulate data.
