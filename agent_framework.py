@@ -194,13 +194,31 @@ class MakimaAgent:
         实际执行规则修改。
         这个函数是 Hermes "改变系统" 的手。
         """
-        logger.info("🔧 Attempting to evolve rules based on recent experiences...")
+        logger.info("🔧 Analyzing patterns to evolve rules...")
         
-        # Hermes 可以修改 state.json 或 config.py 中的阈值
-        # 例如：
-        # if loss_pattern_detected:
-        #     state.set("min_entry_score", 60) # 提高门槛
-        pass
+        from agent_tools import adjust_strategy_params
+
+        # 示例逻辑：如果某个策略在最近亏损严重，自动收紧止损或提高门槛
+        # Hermes 可以根据经验库的具体内容，写出更复杂的判断逻辑
+        
+        loss_count = sum(1 for e in experiences if e.get("outcome_label") == "direction_wrong")
+        total = len(experiences)
+        
+        if total > 10 and (loss_count / total) > 0.6:
+            logger.warning("⚠️ High loss rate detected. Tightening risk controls.")
+            
+            # Hermes 执行“进化”：调整策略参数
+            # 例如：提高 neg_funding_long 策略的止损，或者调整资金费率阈值
+            result = adjust_strategy_params(
+                symbol="GLOBAL",
+                signal_type="neg_funding_long",
+                new_params={"sl_pct": 0.08, "min_rate": -0.05}, # 收紧止损
+                reason=f"Auto-evolved: Loss rate {loss_count/total:.1%} over {total} trades."
+            )
+            
+            logger.info(f"🧬 Evolution applied: {result}")
+        else:
+            logger.info("✅ Performance is within acceptable range. No major changes needed.")
 
 # 如果作为脚本运行，可以测试
 if __name__ == "__main__":

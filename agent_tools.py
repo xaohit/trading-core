@@ -144,6 +144,48 @@ def run_backtest(symbol: str, start: str, end: str, sizing: str = "atr") -> dict
     return result
 
 
+def adjust_strategy_params(symbol: str, signal_type: str, new_params: dict, reason: str = "") -> dict:
+    """
+    Tool: Safely evolve strategy parameters without touching the code.
+    Updates state.json which overrides config.py defaults at runtime.
+    
+    Args:
+        symbol: Target symbol (or "GLOBAL" for all).
+        signal_type: Strategy name (e.g., "neg_funding_long").
+        new_params: Dict of params to change, e.g., {"min_rate": -0.05, "sl_pct": 0.06}.
+        reason: Why this change is being made (for logging).
+    """
+    import json
+    from pathlib import Path
+    from config import STATE_PATH
+
+    # Ensure the state file exists
+    if not STATE_PATH.exists():
+        STATE_PATH.write_text("{}")
+    
+    with open(STATE_PATH, "r") as f:
+        try:
+            state = json.load(f)
+        except Exception:
+            state = {}
+
+    if "evolved_params" not in state:
+        state["evolved_params"] = {}
+
+    # Update params
+    if signal_type not in state["evolved_params"]:
+        state["evolved_params"][signal_type] = {}
+    
+    state["evolved_params"][signal_type].update(new_params)
+    state["evolved_params"][signal_type]["_last_updated_reason"] = reason
+    state["evolved_params"][signal_type]["_last_updated_time"] = int(time.time())
+
+    with open(STATE_PATH, "w") as f:
+        json.dump(state, f, indent=2)
+
+    return {"status": "success", "message": f"Updated {signal_type} with {new_params}"}
+
+
 def inject_historical_experience(symbol: str, start: str, end: str) -> dict:
     """
     Tool: Run a backtest and automatically inject the results as "Experience".
