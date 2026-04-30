@@ -368,10 +368,10 @@ Backtest engine features:
 - **Agent Interface:** `agent_tools.py` exposes the system as a clear set of tools for Hermes/OpenClaw.
 - **Scanner Integration:** Scanner now records market state and macro context for every decision.
 
-**Phase 8B: Backtest-to-Experience Injection (Current Focus)**
-- **Gap:** Backtest results and experience library are disconnected.
-- **Plan:** Use `backtest.py` to run historical K-lines. Hermes identifies key price nodes and macro events, generating an initial "Experience Base" so the Agent starts as an "experienced novice" rather than from zero.
-- **Files:** `backtest.py`, `experience_injector.py`
+**Phase 8B: Backtest-to-Experience Injection (✅ DONE)**
+- **Experience Injector:** Created `experience_injector.py`. It runs a backtest, filters significant trades, and inserts them into the `experience_cases` table as "lessons".
+- **Agent Tool:** Added `inject_historical_experience` to `agent_tools.py`, allowing Hermes to "read the history books" before starting.
+- **Workflow:** The system can now turn raw historical data into actionable wisdom (e.g., "Crash bounce on BTC often fails in this volatility range").
 
 **Phase 8C: 24h Review & LLM Reflection**
 - **Gap:** Review is only at trade closure; no active "prediction vs reality" check.

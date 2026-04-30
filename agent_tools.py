@@ -142,3 +142,18 @@ def run_backtest(symbol: str, start: str, end: str, sizing: str = "atr") -> dict
     )
     result = engine.run()
     return result
+
+
+def inject_historical_experience(symbol: str, start: str, end: str) -> dict:
+    """
+    Tool: Run a backtest and automatically inject the results as "Experience".
+    Use this to give the Agent historical wisdom before live trading.
+    """
+    try:
+        from .experience_injector import inject_backtest_results
+        # We capture print output or just run it
+        # Since it prints to console, we can return a success message
+        inject_backtest_results(symbol, start, end)
+        return {"status": "Injection complete", "message": "Check console for details."}
+    except Exception as e:
+        return {"error": str(e)}
