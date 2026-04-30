@@ -162,23 +162,45 @@ A trading system that evolves from "novice" to "expert" by continuously recordin
    - Created `market_state.py`: Classifies market into Trend/Range/Volatile using ADX/ATR.
    - Scanner now captures full context for every decision.
 
-2. **8B: Backtest-to-Experience Injection (Current Focus)** 
+2. **8B: Backtest-to-Experience Injection ✅ DONE** 
    - Connect `backtest.py` results to the experience library.
    - Hermes analyzes historical K-lines and macro nodes to generate an initial "Experience Base".
    - Files: `backtest.py`, `experience_injector.py`
 
-3. **8C: 24h Review & LLM Reflection** 
+3. **8C: 24h Review & LLM Reflection ✅ Framework DONE**
    - Automatic 24h (or dynamic) check: prediction vs reality. 
    - On failure: Hermes analyzes "what was missed" (e.g., Polymarket divergence, lagging signals).
    - Archives dynamic LLM-generated lessons with tags.
+   - Files: `agent_framework.py`
 
-4. **8D: Contextual Experience Retrieval**
+4. **8D: Contextual Experience Retrieval ✅ Framework DONE**
    - Top 3-5 experiences injected into new decisions, but **weighted by market state match** (e.g., Trend vs Range, Volatility level).
    - Avoids blind copy-paste of lessons across different market regimes.
 
-5. **8E: Feedback Loop & Rule Adjustment**
+5. **8E: Feedback Loop & Rule Adjustment ✅ Framework DONE**
    - Hermes feedback.log → Weekly automated rule tuning.
    - "If suggestion led to >55% wins, adjust threshold automatically."
+   - Files: `agent_framework.py`, `agent_tools.py` (adjust_strategy_params)
+
+### Phase 9 — Quant Rigor & Safety (Professional Standards)
+
+**Goal:** Bridge the gap between "AI Prototype" and "Institutional Grade" by adding mathematical rigor and hard safety constraints.
+
+1. **9A: Backtest Realism (Cost Modeling) ✅ IN PROGRESS**
+   - Add Transaction Costs (0.04% Taker fees x2).
+   - Add Slippage modeling (1 tick / order book depth simulation).
+   - Account for Funding Rate costs in holding periods > 8h.
+   - Files: `backtest.py`
+
+2. **9B: Agent Guardrails (Hard Constraints)**
+   - LLM "Safety Sandbox": LLM can suggest confidence adjustments, but *must* pass `risk.py` deterministic checks.
+   - Hard caps: Max leverage (absolute), Max position size (absolute), Emergency Blacklists.
+   - Files: `risk.py`, `agent_framework.py`
+
+3. **9C: Portfolio Risk Math**
+   - Correlation monitoring (don't hold correlated longs).
+   - Volatility targeting (normalize position sizes).
+   - Files: `portfolio.py`
 
 ### Phase 7 Priority Order
 Execute in order: 7A → 7E → 8A → 8B → 8C → 8D → 8E

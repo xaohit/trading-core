@@ -202,7 +202,10 @@ class BacktestEngine:
                  min_passed: int = 4,
                  min_score: int = 50,
                  cooldown_candles: int = 0,
-                 max_positions: int = 3):
+                 max_positions: int = 3,
+                 # Phase 9A: Realism Parameters
+                 taker_fee_rate: float = 0.0004,  # 0.04% Binance Taker
+                 slippage_pct: float = 0.0001):   # 1 tick approx
         self.symbols = symbols
         self.klines_by_symbol = klines_by_symbol
         self.initial_balance = initial_balance
@@ -219,6 +222,10 @@ class BacktestEngine:
         self.min_score = min_score
         self.cooldown_candles = cooldown_candles
         self.max_positions = max_positions
+        
+        # Phase 9A
+        self.taker_fee_rate = taker_fee_rate
+        self.slippage_pct = slippage_pct
 
         # State
         self.balance = initial_balance
@@ -228,6 +235,7 @@ class BacktestEngine:
         self.equity_curve: list[dict] = []
         self.candle_idx = 0
         self.cooldown_until: dict[str, int] = {}  # symbol -> candle idx
+        self.total_fees_paid = 0.0
 
         # Stats
         self.total_pnl = 0.0
@@ -318,7 +326,7 @@ class BacktestEngine:
             return
 
         # Determine entry price and SL/TP
-        entry_price = price
+        entry_price = price * (1 + self.slippage_pct) # Apply slippage
         atr = snapshot["atr"]
 
         if self.sizing_mode == "atr":
@@ -332,6 +340,7 @@ class BacktestEngine:
             tp1_price = entry_price + (entry_price - stop_loss) * self.tp1_r
             tp2_price = entry_price + (entry_price - stop_loss) * self.tp2_r
         else:
+            entry_price = price * (1 - self.slippage_pct) # Apply slippage for short
             stop_loss = entry_price * (1 + sl_pct)
             tp1_price = entry_price - (stop_loss - entry_price) * self.tp1_r
             tp2_price = entry_price - (stop_loss - entry_price) * self.tp2_r
@@ -344,6 +353,11 @@ class BacktestEngine:
             notional = self.equity * self.risk_pct * self.leverage / 100
 
         position_usd = notional / self.leverage
+        
+        # Deduct Entry Fee
+        entry_fee = position_usd * self.leverage * self.taker_fee_rate
+        self.balance -= entry_fee
+        self.total_fees_paid += entry_fee
 
         self.positions[symbol] = {
             "symbol": symbol,
@@ -475,7 +489,19 @@ class BacktestEngine:
             pos["tp2_done"] = True
 
         pnl_pct = self._calc_pnl_pct(pos, exit_price)
+        
+        # Apply exit slippage
+        if pos["direction"] == "long":
+            exit_price *= (1 - self.slippage_pct)
+        else:
+            exit_price *= (1 + self.slippage_pct)
+            
         pnl_usd = pos["position_usd"] * (close_pct / 100) * pnl_pct / 100 * self.leverage
+        
+        # Deduct Exit Fee
+        exit_fee = pos["position_usd"] * (close_pct / 100) * self.leverage * self.taker_fee_rate
+        pnl_usd -= exit_fee
+        self.total_fees_paid += exit_fee
 
         pos["remaining_pct"] = max(remaining - close_pct, 0)
         self.balance += pnl_usd
@@ -499,7 +525,19 @@ class BacktestEngine:
     def _force_close(self, symbol: str, exit_price: float, reason: str, idx: int):
         pos = self.positions[symbol]
         pnl_pct = self._calc_pnl_pct(pos, exit_price)
+        
+        # Apply exit slippage
+        if pos["direction"] == "long":
+            exit_price *= (1 - self.slippage_pct)
+        else:
+            exit_price *= (1 + self.slippage_pct)
+            
         pnl_usd = pos["position_usd"] * (pos["remaining_pct"] / 100) * pnl_pct / 100 * self.leverage
+        
+        # Deduct Exit Fee
+        exit_fee = pos["position_usd"] * (pos["remaining_pct"] / 100) * self.leverage * self.taker_fee_rate
+        pnl_usd -= exit_fee
+        self.total_fees_paid += exit_fee
 
         self.balance += pnl_usd
         self.total_pnl += pnl_usd
@@ -579,6 +617,7 @@ class BacktestEngine:
             "final_balance": round(self.balance, 2),
             "total_pnl_usd": round(self.total_pnl, 2),
             "total_pnl_pct": round(total_pnl_pct, 2),
+            "total_fees_paid": round(self.total_fees_paid, 2),
             "total_trades": total_trades,
             "winning_trades": len(winning),
             "losing_trades": len(losing),
