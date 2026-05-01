@@ -454,6 +454,48 @@ Verified:
 - `tests/smoke_phase7a.py`: `PHASE7A_SMOKE_OK`
 - `tests/smoke_phase7e.py`: `PHASE7E_SMOKE_OK`
 - `tests/smoke_decision_memory.py`: `DECISION_MEMORY_SMOKE_OK`
+
+## 2026-05-01 Hermes-Ready Provider Architecture
+
+Implemented:
+- Added `decision_provider.py`.
+- Added `trade_hypothesis.py`.
+- Added `semantic_radar.py`.
+- Added `daily_reflection.py`.
+- Updated `scanner.py` to call a `DecisionProvider` instead of directly calling local Agent logic.
+- Updated `agent_tools.py` with:
+  - `get_daily_reflection_report()`
+  - `add_semantic_event()`
+- Added `DECISION_PROVIDER` config.
+- Added `tests/smoke_decision_provider.py`.
+
+Architecture:
+```text
+DecisionPipeline
+-> EventTriggeredDecisionProvider
+   -> LocalDecisionProvider / AgentDecisionGate
+   -> HermesDecisionProvider placeholder
+-> TA/RR Guard
+-> Paper Execution
+-> Decision Memory
+-> Daily Reflection / Experience Library
+```
+
+Hermes remains intentionally event-triggered:
+- semantic event severity >= 70
+- S-grade high-score candidate
+- historical experience conflict
+- A-grade mid/high-score candidate with enough prior experience
+
+Verified:
+- `py_compile`: provider, hypothesis, semantic radar, daily reflection, scanner, agent tools, config, web
+- `tests/smoke_decision_provider.py`: `DECISION_PROVIDER_SMOKE_OK`
+- `tests/smoke_decision_pipeline.py`: `DECISION_PIPELINE_SMOKE_OK`
+- `tests/smoke_agent_gate.py`: `AGENT_GATE_SMOKE_OK`
+- `tests/smoke_decision_memory.py`: `DECISION_MEMORY_SMOKE_OK`
+- `tests/smoke_phase4b.py`: `PHASE4B_SMOKE_OK`
+- `tests/smoke_phase7a.py`: `PHASE7A_SMOKE_OK`
+- `tests/smoke_phase7e.py`: `PHASE7E_SMOKE_OK`
 ## Current Next Step
 **Phase 9: Deployment & Tuning.**
 - The system is now structurally complete (Phases 1-8).

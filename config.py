@@ -146,6 +146,7 @@ STRENGTH_A = {"neg_funding": -0.05, "pos_funding": 0.05, "crash": -10, "pump": 3
 # ===== Decision Memory Loop =====
 DECISION_MEMORY_ENABLED = os.getenv("DECISION_MEMORY_ENABLED", "1") == "1"
 DECISION_REVIEW_HORIZON_HOURS = int(os.getenv("DECISION_REVIEW_HORIZON_HOURS", "24"))
+DECISION_PROVIDER = os.getenv("DECISION_PROVIDER", "event")
 DECISION_JOURNAL_ACTIONS = {
     action.strip()
     for action in os.getenv(

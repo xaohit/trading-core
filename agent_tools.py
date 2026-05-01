@@ -16,6 +16,8 @@ try:
     from .strategies.detectors import detect_all
     from .config import DECISION_REVIEW_HORIZON_HOURS, STATE_PATH
     from .ta_checker import assess_trade_setup
+    from .semantic_radar import SemanticRadar
+    from .daily_reflection import build_daily_reflection_report
 except ImportError:
     from market_snapshot import get_market_snapshot
     from signals import analyze
@@ -25,6 +27,8 @@ except ImportError:
     from strategies.detectors import detect_all
     from config import DECISION_REVIEW_HORIZON_HOURS, STATE_PATH
     from ta_checker import assess_trade_setup
+    from semantic_radar import SemanticRadar
+    from daily_reflection import build_daily_reflection_report
 
 
 def get_market_analysis(symbol: str, macro_data: dict | None = None) -> dict:
@@ -130,6 +134,35 @@ def get_experience_library(symbol: str = None, limit: int = 10) -> list[dict]:
     Tool: Query the agent's experience library.
     """
     return DecisionMemory.recent_experiences(limit=limit)
+
+
+def get_daily_reflection_report(limit: int = 80) -> dict:
+    """
+    Tool: Build a compact daily trading desk review for Hermes.
+    """
+    return build_daily_reflection_report(limit=limit)
+
+
+def add_semantic_event(
+    symbol: str,
+    event_type: str,
+    severity: int,
+    direction_hint: str,
+    summary: str,
+    source: str = "manual",
+) -> dict:
+    """
+    Tool: Add a news/macro/KOL/Polymarket style event to the semantic radar.
+    Events do not trade directly; they can trigger Hermes review.
+    """
+    return SemanticRadar.add_event(
+        symbol=symbol,
+        event_type=event_type,
+        severity=severity,
+        direction_hint=direction_hint,
+        summary=summary,
+        source=source,
+    )
 
 
 def run_backtest(symbol: str, start: str, end: str, sizing: str = "atr") -> dict:

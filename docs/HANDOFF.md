@@ -65,6 +65,25 @@ signal discovery -> DecisionPipeline -> ranking -> AgentDecisionGate -> TA/RR gu
 New smoke:
 - `tests/smoke_decision_pipeline.py` verifies clean acceptance, hard score/tag rejection, quality rejection, and risk rejection.
 
+## 2026-05-01 Provider Architecture Refactor
+
+The project now has a concrete Hermes-ready decision boundary:
+- `decision_provider.py` defines `DecisionProvider`, `LocalDecisionProvider`, `HermesDecisionProvider`, and `EventTriggeredDecisionProvider`.
+- `scanner.py` calls `get_decision_provider()` instead of calling `AgentDecisionGate` directly.
+- `AgentDecisionGate` remains the deterministic local fallback.
+- `HermesDecisionProvider` is a safe placeholder: if selected before a real client is wired, it returns `wait`.
+- `trade_hypothesis.py` makes hypothesis, expected path, invalidation, ignored risks, and experience refs first-class decision data.
+- `semantic_radar.py` is a lightweight event inbox for news/macro/KOL/Polymarket style signals.
+- `daily_reflection.py` builds a compact daily trading desk review for Hermes.
+
+Environment:
+- `DECISION_PROVIDER=event` routes ordinary decisions locally and reserves Hermes for high-value/conflict/semantic cases.
+- `DECISION_PROVIDER=local` forces local-only decisions.
+- `DECISION_PROVIDER=hermes` forces Hermes placeholder and is safe until the real client is implemented.
+
+New smoke:
+- `tests/smoke_decision_provider.py` verifies local hypothesis output, safe Hermes routing, semantic radar, and hypothesis risks.
+
 ## Mission
 
 `trading-core` is a paper-first autonomous crypto futures trading system for Binance USD-M. All phases 1-6 of the refactor plan are complete. The system runs paper trading only.

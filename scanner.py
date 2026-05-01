@@ -23,9 +23,10 @@ try:
     from .social_heat import get_candidate_symbols as get_heat_candidates
     from .reflection import StrategyWeighter, FailureArchive
     from .market_state import classify_market_state
-    from .agent_decision import AgentDecisionGate
     from .ta_checker import assess_trade_setup
     from .decision_pipeline import DecisionPipeline
+    from .decision_provider import get_decision_provider
+    from .semantic_radar import SemanticRadar
 except ImportError:
     from config import (
         MAX_OPEN_POSITIONS, EXCLUDE_SYMBOLS, MIN_VOLUME_M, COOLDOWN_HOURS,
@@ -46,9 +47,10 @@ except ImportError:
     from social_heat import get_candidate_symbols as get_heat_candidates
     from reflection import StrategyWeighter, FailureArchive
     from market_state import classify_market_state
-    from agent_decision import AgentDecisionGate
     from ta_checker import assess_trade_setup
     from decision_pipeline import DecisionPipeline
+    from decision_provider import get_decision_provider
+    from semantic_radar import SemanticRadar
 
 
 TZ_UTC8 = timezone(timedelta(hours=8))
@@ -67,6 +69,7 @@ class Scanner:
         self.state = State()
         self.risk = RiskManager(self.state)
         self.pipeline = DecisionPipeline(self.risk)
+        self.decision_provider = get_decision_provider()
         self._now = datetime.now(TZ_UTC8)
 
     def monitor(self) -> list:
@@ -408,13 +411,15 @@ class Scanner:
         snapshot = signal.get("snapshot", {})
         analysis = signal.get("analysis", {})
         experiences = signal.get("experience_context", [])
+        semantic_events = SemanticRadar.events_for(symbol)
 
-        decision = AgentDecisionGate.evaluate(
+        decision = self.decision_provider.decide(
             symbol=symbol,
             signal=signal,
             snapshot=snapshot,
             analysis=analysis,
             experiences=experiences,
+            semantic_events=semantic_events,
         )
         if not decision.get("approved"):
             return decision

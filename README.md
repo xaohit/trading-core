@@ -88,7 +88,10 @@ signal discovery
 | Signal Discovery | `strategies/detectors.py` | 发现候选机会 |
 | Context Scoring | `signals.py`, `market_snapshot.py` | 计算市场质量分、标签、verdict |
 | Pre-Agent Pipeline | `decision_pipeline.py` | 环境过滤、质量过滤、账户风控 |
-| Agent Gate | `agent_decision.py` | 结合分数、强度、历史经验做 trade/wait 判断 |
+| Decision Provider | `decision_provider.py` | 路由本地判断或未来 Hermes 判断 |
+| Agent Gate | `agent_decision.py` | 本地 fallback，结合分数、强度、历史经验做 trade/wait 判断 |
+| Trade Hypothesis | `trade_hypothesis.py` | 结构化记录假设、预期路径、失效条件 |
+| Semantic Radar | `semantic_radar.py` | 接收新闻、宏观、KOL、Polymarket 等语义事件 |
 | TA/RR Guard | `ta_checker.py` | 检查技术结构与盈亏比，要求 R/R >= 1.5 |
 | Execution | `executor.py` | 纸交易开仓、TP、移动止损 |
 | Memory Loop | `decision_memory.py` | 决策留痕、24h 回看、经验库 |
@@ -236,22 +239,39 @@ python tests/smoke_phase7e.py
 
 ## Hermes / MAKIMA 接入方向
 
-未来 Hermes 应该接管 `AgentDecisionGate` 的判断来源：
+未来 Hermes 应该作为 `DecisionProvider` 接入，而不是替代整套系统：
 
-1. 读取 `get_market_analysis(symbol)` 返回的完整上下文。
-2. 读取 Top 3-5 条历史相似经验。
-3. 输出结构化 JSON：
+1. `DecisionPipeline` 先完成本地筛选。
+2. `EventTriggeredDecisionProvider` 判断是否需要 Hermes。
+3. 只有高价值、冲突、语义事件触发的候选才交给 Hermes。
+4. Hermes 输出结构化 JSON：
    - `action`
    - `conviction`
    - `hypothesis`
+   - `expected_path`
    - `stop_loss`
    - `target_price`
    - `invalidation_condition`
    - `reasoning`
-4. 系统用本地 hard guard 校验。
-5. 通过则纸交易执行，拒绝也记录。
-6. 24h 后回看，失败样本交给 Hermes 复盘。
-7. 复盘结果写入经验库，下次类似场景自动注入。
+5. 系统用本地 hard guard 校验。
+6. 通过则纸交易执行，拒绝也记录。
+7. 24h 后回看，失败样本交给 Hermes 复盘。
+8. 复盘结果写入经验库，下次类似场景自动注入。
+
+Provider 模式：
+
+```text
+DECISION_PROVIDER=event   # 默认：事件触发路由，本地优先，必要时触发 Hermes 占位
+DECISION_PROVIDER=local   # 只使用本地 AgentDecisionGate
+DECISION_PROVIDER=hermes  # 只使用 Hermes provider；未接真实客户端前会安全 wait
+```
+
+Hermes 触发条件包括：
+
+- 高 severity 语义事件
+- S 级高分候选
+- 历史经验存在明显冲突
+- A 级中高分且已有足够历史经验
 
 ## 当前完成度
 
@@ -262,6 +282,10 @@ python tests/smoke_phase7e.py
 | 市场质量评分 | 已完成 |
 | 前置决策流水线 | 已完成 |
 | 本地 Agent Gate | 已完成 |
+| Decision Provider 架构 | 已完成 |
+| 结构化交易假设 | 已完成 |
+| 语义雷达骨架 | 已完成 |
+| 每日复盘报告 | 已完成 |
 | TA/RR 校验 | 已完成 |
 | 纸交易执行 | 已完成 |
 | TP/SL 管理 | 已完成 |
@@ -269,7 +293,7 @@ python tests/smoke_phase7e.py
 | 24h 回看 | 已完成 |
 | 经验库 | 已完成 |
 | 回测引擎 | 已完成 |
-| Hermes 真实 API 接入 | 未完成 |
+| Hermes 真实 API 客户端 | 未完成 |
 | 实盘交易安全闭环 | 未完成 |
 
 ## 重要安全说明
