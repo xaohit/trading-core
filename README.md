@@ -1,117 +1,276 @@
-# Trading Core — 自主进化的 AI 量化交易系统
+# Trading Core
 
-> **Vision**: 一个真正会自己学习的交易 Agent。从新手到老手，每一次决策都留痕，从失败中提炼经验，主动调整判断逻辑。
+一个面向加密货币合约市场的 **纸交易优先** AI 交易系统。它的目标不是做一套静态量化脚本，而是搭建一个可以持续留痕、复盘、积累经验，并逐步接入 Hermes/MAKIMA 进行判断的交易 Agent 底座。
 
-## 🌟 系统定位
+> 当前状态：可以用于纸交易、模拟观察、回测、决策记录和经验库积累。  
+> 不建议直接实盘。真实 Hermes API 与实盘安全闭环仍未完成。
 
-这不是一个普通的静态量化脚本，而是一个**基于 Agent (MAKIMA/Hermes) 的自主进化系统**。
-- **Claude** 负责搭建系统架构与规则底线。
-- **Hermes** 负责 7x24 小时的策略分析与执行。
-- **95% 的计算在本地运行 (0 Token 消耗)**，仅在深度反思和规则进化时调用 LLM。
+## 项目定位
 
-## 🚀 核心能力 (Current Features)
-
-### 🧠 Agent 学习闭环 (Phase 8)
-- **深度决策快照 (Deep Snapshots)**: 记录每一笔决策的宏观环境、市场状态（趋势/震荡）、以及 AI 的原始推理过程。
-- **经验库检索 (Experience Retrieval)**: 开仓前自动调取 Top 3 历史相似案例，避免重复犯错。
-- **市场状态识别**: 自动判断当前是 Trend / Range / Volatile 模式，智能过滤不适用的历史经验。
-- **Agent 工具接口**: 提供清晰的 API (`agent_tools.py`) 供外部 Agent (OpenClaw/Hermes) 调用。
-
-### 📊 市场感知层 (Phase 1-3)
-- **多维数据**: 实时获取 Binance 的 OI 变化、资金费率、多空持仓比 (LSR)、主动买卖比、深度不平衡等。
-- **信号评分**: 0-100 分综合打分，包含 verdict、tags、OI 背离检测。
-
-### 🛡️ 多层级风控 (Phase 4B, 7A)
-- **TP 金字塔**: TP1 (1.5R) 减仓并推保本，TP2 (3R) 减仓开启追踪止损。
-- **动态风控**: 板块集中度限制、单日亏损熔断、止损后冷却机制。
-- **入场质量门**: 7 项硬性否决 + 7 项质量检查，拒绝低质量交易。
-
-### 📜 历史回测 (Phase 7E)
-- **K 线回放引擎**: 支持任意币种、任意时间段的策略验证。
-- **经验注入**: 将历史回测结果转化为"初始经验库"，让 Agent 上岗即具备历史智慧。
-
-## 🏗️ 架构与模块
+Trading Core 的核心思想是：
 
 ```text
-┌───────────────┐       ┌──────────────┐       ┌───────────────┐
-│  Agent (Hermes) │ ────→ │ Agent Tools  │ ────→ │ Trading Core  │
-│  分析与反思     │       │  (Skill API) │       │  (Engine)     │
-└───────────────┘       └──────────────┘       └───────┬───────┘
-                                                       │
-                                                       ▼
-┌───────────────────────────────────────────────────────────────────────┐
-│                          底层系统模块                                  │
-│  [Market Snapshot] → [Signals] → [Scanner] → [Risk] → [Execution]     │
-└───────────────────────────────────────────────────────────────────────┘
+规则发现机会 -> 上下文过滤 -> Agent 判断 -> 硬风控校验 -> 纸交易执行 -> 24h 复盘 -> 经验沉淀
 ```
 
-### 模块清单
-| 模块 | 描述 |
-| :--- | :--- |
-| `agent_tools.py` | Agent 技能接口，提供 `get_market_analysis`, `record_agent_decision` 等工具 |
-| `scanner.py` | 核心调度器：过滤、评分、风控检查、开仓 |
-| `market_snapshot.py` | 获取 Binance 深度数据（OI, LSR, Taker, ATR） |
-| `decision_memory.py` | 决策记忆：快照记录、结果回顾、经验归档 |
-| `backtest.py` | 历史回测引擎，支持 ATR 与固定仓位对比 |
-| `market_state.py` | 识别市场状态 (Trend/Range/Volatile)，辅助经验匹配 |
-| `reflection.py` | 失败归档、策略权重计算、规则反思 |
+系统里有两类智能：
 
-## 🛠️ 快速开始 (Quick Start)
+- **本地规则智能**：95% 的扫描、过滤、风控、回测和复盘都在本地执行，不依赖大模型 token。
+- **Agent 判断智能**：Hermes/MAKIMA 后续负责结合市场上下文、历史经验和复盘教训，做最终 trade/wait 判断。
 
-### 1. 部署核心
+目前 Hermes 还没有作为真实 API 接入。仓库里先提供了确定性的 `AgentDecisionGate`，作为过渡版 Agent 判断层，保证系统在无 LLM 的情况下也能跑通。
+
+## 当前能力
+
+### 1. 市场扫描
+
+系统会从 Binance USD-M 市场获取数据，并优先使用社交热度候选池。数据包括：
+
+- 价格、成交量、涨跌幅
+- 资金费率
+- OI 与 OI 变化
+- 全网多空比、头部账户多空比
+- taker 主动买卖结构
+- 盘口深度不平衡
+- ATR 波动率
+- Binance Square 社交热度
+
+### 2. 策略候选信号
+
+当前内置 4 个种子策略，用来发现候选机会：
+
+| 信号类型 | 方向 | 逻辑 |
+|---|---:|---|
+| `neg_funding_long` | 做多 | 资金费率极端为负，押空头拥挤后的修复/逼空 |
+| `pos_funding_short` | 做空 | 资金费率极端为正，押多头拥挤后的回落 |
+| `crash_bounce_long` | 做多 | 24h 暴跌后出现反弹，押短线修复 |
+| `pump_short` | 做空 | 24h 暴涨后从高点回落，押冲高回落 |
+
+这些策略只负责发现候选机会，不再直接决定开仓。
+
+### 3. 决策流水线
+
+当前主链路已经拆成清晰边界：
+
+```text
+signal discovery
+-> DecisionPipeline
+-> ranking
+-> AgentDecisionGate
+-> TA/RR guard
+-> paper execution
+-> decision memory
+```
+
+各层职责：
+
+| 层 | 文件 | 职责 |
+|---|---|---|
+| Signal Discovery | `strategies/detectors.py` | 发现候选机会 |
+| Context Scoring | `signals.py`, `market_snapshot.py` | 计算市场质量分、标签、verdict |
+| Pre-Agent Pipeline | `decision_pipeline.py` | 环境过滤、质量过滤、账户风控 |
+| Agent Gate | `agent_decision.py` | 结合分数、强度、历史经验做 trade/wait 判断 |
+| TA/RR Guard | `ta_checker.py` | 检查技术结构与盈亏比，要求 R/R >= 1.5 |
+| Execution | `executor.py` | 纸交易开仓、TP、移动止损 |
+| Memory Loop | `decision_memory.py` | 决策留痕、24h 回看、经验库 |
+
+### 4. 纸交易执行与持仓管理
+
+执行层目前是纸交易优先：
+
+- ATR 动态止损
+- 每笔固定风险比例
+- TP1 触发后部分止盈并推保护
+- TP2 触发后继续减仓
+- 剩余仓位使用 trailing stop
+- 硬止损保护
+- 平仓后记录结果，用于后续复盘和策略权重调整
+
+### 5. 决策记忆与经验库
+
+每个重要动作都会记录：
+
+- `opened`
+- `env_reject`
+- `score_reject`
+- `entry_veto`
+- `quality_reject`
+- `risk_reject`
+- `agent_reject`
+
+记录内容包括：
+
+- 当时信号与市场快照
+- 市场质量分和 tags
+- 宏观上下文
+- 市场状态
+- Agent reasoning
+- 引用过的历史经验
+- 后续 24h 价格表现
+
+系统会在决策到期后回看结果，标记方向对错、是否打到目标、是否失效，并把复盘沉淀为经验案例。
+
+## 项目结构
+
+```text
+trading-core/
+├── scanner.py                 # 主扫描编排器
+├── decision_pipeline.py       # 前置决策流水线
+├── agent_decision.py          # 本地 Agent 判断层
+├── agent_tools.py             # 给 Hermes/OpenClaw 调用的工具接口
+├── main_agent.py              # MAKIMA/Hermes 调度入口雏形
+├── decision_memory.py         # 决策记忆、24h 回看、经验库
+├── market_snapshot.py         # Binance 市场快照
+├── signals.py                 # 市场质量评分
+├── ta_checker.py              # 技术结构与盈亏比检查
+├── executor.py                # 纸交易执行与 TP 管理
+├── risk.py                    # 账户与入场风控
+├── backtest.py                # 回测引擎
+├── reflection.py              # 失败归档、策略权重、规则建议
+├── social_heat.py             # Binance Square 热度候选池
+├── db/                        # SQLite schema 与交易记录
+├── strategies/                # 种子策略检测器
+├── tests/                     # smoke tests
+└── docs/                      # 项目计划、交接文档、状态记录
+```
+
+## 快速开始
+
+### 1. 安装
+
 ```bash
 git clone https://github.com/xaohit/trading-core.git
 cd trading-core
-pip install -r requirements.txt
-
-# 配置环境
-cp .env.example .env
-# 编辑 .env 填入你的代理设置等（API Key 可选）
+python -m venv .venv
+.\.venv\Scripts\pip install -r requirements.txt
 ```
 
-### 2. 启动系统
+Linux/macOS:
+
 ```bash
-# 启动后台监控服务（模拟盘）
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
+
+### 2. 配置
+
+复制环境变量模板：
+
+```bash
+cp .env.example .env
+```
+
+系统默认读取：
+
+```text
+~/.hermes/.env
+```
+
+Binance API key 当前不是必须项。纸交易和公开行情扫描可以先不配置真实交易权限。
+
+### 3. 运行服务
+
+```bash
 python server.py restart
-
-# 检查状态
 python server.py status
-# 访问 http://localhost:8080 查看 Web 仪表盘
 ```
 
-### 3. 接入 Hermes (Agent)
-在 Hermes 的上下文中导入工具包，开始工作：
-```python
-from agent_tools import *
+Web UI:
 
-# 获取 BTC 深度分析及相关历史经验
-data = get_market_analysis("BTCUSDT")
-
-# 记录你的判断（系统会自动存档并设定 24h 后回访）
-record_agent_decision(
-    symbol="BTCUSDT",
-    action="open_long",
-    reasoning="RSI 超卖反弹，宏观环境向好",
-    target_price=75000.0
-)
+```text
+http://localhost:8080
 ```
 
-## 🗺️ Roadmap 进度
+### 4. 手动跑测试
 
-| Phase | 名称 | 状态 |
-| :--- | :--- | :--- |
-| 1-3 | 市场快照、信号、扫描集成 | ✅ 已完成 |
-| 4A | 决策记忆循环 (Decision Memory) | ✅ 已完成 |
-| 4B | ATR 动态仓位与 TP 金字塔 | ✅ 已完成 |
-| 5 | 社交热度候选池 (Social Heat) | ✅ 已完成 |
-| 6 | 反思引擎 (Reflection Engine) | ✅ 已完成 |
-| 7A | 风险硬化 (Risk Hardening) | ✅ 已完成 |
-| 7E | 回测引擎 (Backtest Engine) | ✅ 已完成 |
-| **8A** | **深度决策快照 & Agent 接口** | **✅ 刚刚完成** |
-| 8B | 历史回测 → 经验库注入 | 🔧 进行中 |
-| 8C | 24h 自动回访与 LLM 反思 | ⏳ 待启动 |
-| 8D | 场景感知经验调取 | ⏳ 待启动 |
-| 8E | 规则反馈与自动进化 | ⏳ 待启动 |
+```bash
+python -m py_compile config.py scanner.py decision_pipeline.py agent_decision.py decision_memory.py executor.py backtest.py
 
-## 📜 免责声明
-本项目仅供技术研究和学习使用。系统包含风险控制系统，但不保证盈利。任何基于此项目的实盘操作风险由操作者自行承担。
+python tests/smoke_decision_pipeline.py
+python tests/smoke_agent_gate.py
+python tests/smoke_decision_memory.py
+python tests/smoke_phase4b.py
+python tests/smoke_phase6.py
+python tests/smoke_phase7a.py
+python tests/smoke_phase7e.py
+```
+
+## 当前交易逻辑
+
+简化版：
+
+```text
+1. 获取候选币
+2. 运行 4 个种子策略，产生候选信号
+3. 拉取市场快照并打分
+4. DecisionPipeline 做前置过滤
+5. 候选信号排序
+6. AgentDecisionGate 结合经验与上下文决定 trade/wait
+7. TA/RR guard 检查盈亏比和技术结构
+8. 纸交易开仓
+9. TP/SL/trailing stop 管理
+10. 决策留痕，24h 后复盘
+```
+
+这套逻辑的设计重点是避免“看到信号就开仓”。策略只是提出假设，Agent 与风控负责验证假设。
+
+## Hermes / MAKIMA 接入方向
+
+未来 Hermes 应该接管 `AgentDecisionGate` 的判断来源：
+
+1. 读取 `get_market_analysis(symbol)` 返回的完整上下文。
+2. 读取 Top 3-5 条历史相似经验。
+3. 输出结构化 JSON：
+   - `action`
+   - `conviction`
+   - `hypothesis`
+   - `stop_loss`
+   - `target_price`
+   - `invalidation_condition`
+   - `reasoning`
+4. 系统用本地 hard guard 校验。
+5. 通过则纸交易执行，拒绝也记录。
+6. 24h 后回看，失败样本交给 Hermes 复盘。
+7. 复盘结果写入经验库，下次类似场景自动注入。
+
+## 当前完成度
+
+| 模块 | 状态 |
+|---|---|
+| 市场数据快照 | 已完成 |
+| 种子策略信号 | 已完成 |
+| 市场质量评分 | 已完成 |
+| 前置决策流水线 | 已完成 |
+| 本地 Agent Gate | 已完成 |
+| TA/RR 校验 | 已完成 |
+| 纸交易执行 | 已完成 |
+| TP/SL 管理 | 已完成 |
+| 决策记忆 | 已完成 |
+| 24h 回看 | 已完成 |
+| 经验库 | 已完成 |
+| 回测引擎 | 已完成 |
+| Hermes 真实 API 接入 | 未完成 |
+| 实盘交易安全闭环 | 未完成 |
+
+## 重要安全说明
+
+本项目当前只建议用于：
+
+- 技术研究
+- 纸交易
+- 模拟盘观察
+- 回测
+- Agent 交易记忆系统实验
+
+不建议直接实盘。即使未来接入交易 API，也必须先完成：
+
+- API 权限隔离
+- 最大亏损熔断
+- 订单失败恢复
+- 网络异常处理
+- 交易所异常返回处理
+- 实盘 dry-run 对账
+- 小资金灰度验证
+
+本项目不构成投资建议，也不保证盈利。任何实盘风险由使用者自行承担。
