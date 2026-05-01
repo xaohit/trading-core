@@ -150,7 +150,7 @@ DECISION_JOURNAL_ACTIONS = {
     action.strip()
     for action in os.getenv(
         "DECISION_JOURNAL_ACTIONS",
-        "opened,score_reject,risk_reject,env_reject",
+        "opened,score_reject,risk_reject,env_reject,entry_veto,quality_reject,agent_reject",
     ).split(",")
     if action.strip()
 }

@@ -143,6 +143,7 @@ class Executor:
                 "tags": signal.get("tags", []),
                 "snapshot": signal.get("snapshot", {}),
                 "analysis": signal.get("analysis", {}),
+                "agent_decision": signal.get("agent_decision", {}),
             }
         }
 

@@ -24,6 +24,8 @@ try:
     from .social_heat import get_candidate_symbols as get_heat_candidates
     from .reflection import StrategyWeighter, FailureArchive
     from .market_state import classify_market_state
+    from .agent_decision import AgentDecisionGate
+    from .ta_checker import assess_trade_setup
 except ImportError:
     from config import (
         MAX_OPEN_POSITIONS, EXCLUDE_SYMBOLS, MIN_VOLUME_M, COOLDOWN_HOURS,
@@ -45,6 +47,8 @@ except ImportError:
     from social_heat import get_candidate_symbols as get_heat_candidates
     from reflection import StrategyWeighter, FailureArchive
     from market_state import classify_market_state
+    from agent_decision import AgentDecisionGate
+    from ta_checker import assess_trade_setup
 
 
 TZ_UTC8 = timezone(timedelta(hours=8))
@@ -369,6 +373,33 @@ class Scanner:
         if best_signal["strength"] == "B":
             return {"action": "skip_b", "best": best_signal, "opened": 0}
 
+        agent_decision = self._agent_gate(best_signal)
+        best_signal["agent_decision"] = agent_decision
+        if not agent_decision.get("approved"):
+            TradeDB.record_signal(
+                _now_str(),
+                best_signal["symbol"],
+                best_signal,
+                best_signal.get("composite_score", best_signal.get("env_score", 0)),
+                "agent_reject",
+                agent_decision.get("reasoning"),
+                best_signal.get("snapshot", {}),
+                best_signal.get("analysis", {}),
+            )
+            self._remember_decision(
+                best_signal["symbol"], "agent_reject", best_signal,
+                best_signal.get("snapshot", {}),
+                best_signal.get("analysis", {}),
+                agent_decision.get("reasoning"),
+            )
+            return {
+                "action": "agent_reject",
+                "best": best_signal,
+                "agent_decision": agent_decision,
+                "opened": 0,
+                "heat_used": heat_used,
+            }
+
         # 开仓
         trade = Executor.open_position(
             best_signal["symbol"],
@@ -401,6 +432,74 @@ class Scanner:
             "opened": 1,
             "heat_used": heat_used,
         }
+
+    def _agent_gate(self, signal: dict) -> dict:
+        symbol = signal["symbol"]
+        direction = signal.get("direction")
+        snapshot = signal.get("snapshot", {})
+        analysis = signal.get("analysis", {})
+        experiences = signal.get("experience_context", [])
+
+        decision = AgentDecisionGate.evaluate(
+            symbol=symbol,
+            signal=signal,
+            snapshot=snapshot,
+            analysis=analysis,
+            experiences=experiences,
+        )
+        if not decision.get("approved"):
+            return decision
+
+        entry_price = signal.get("price") or snapshot.get("price")
+        stop_loss = self._planned_stop_loss(signal, entry_price)
+        decision["entry_price"] = entry_price
+        decision["stop_loss"] = stop_loss
+
+        validation = self._validate_agent_trade(symbol, direction, entry_price, stop_loss)
+        decision["ta_validation"] = validation
+        if not validation.get("is_valid"):
+            decision["approved"] = False
+            decision["action"] = "wait"
+            decision["reasoning"] = (
+                f"{decision.get('reasoning')} | ta_reject={validation.get('reason')}"
+            )
+            return decision
+
+        decision["target_price"] = validation.get("target_price")
+        decision["r_r_ratio"] = validation.get("r_r_ratio")
+        return decision
+
+    @staticmethod
+    def _planned_stop_loss(signal: dict, entry_price: float | None) -> float | None:
+        if not entry_price:
+            return None
+        sl_pct = float(signal.get("sl_pct") or 0.05)
+        if signal.get("direction") == "long":
+            return round(entry_price * (1 - sl_pct), 8)
+        if signal.get("direction") == "short":
+            return round(entry_price * (1 + sl_pct), 8)
+        return None
+
+    @staticmethod
+    def _validate_agent_trade(
+        symbol: str,
+        direction: str | None,
+        entry_price: float | None,
+        stop_loss: float | None,
+    ) -> dict:
+        if direction not in {"long", "short"} or not entry_price or not stop_loss:
+            return {"is_valid": False, "reason": "missing direction, entry, or stop loss", "r_r_ratio": 0}
+
+        klines = Market.klines(symbol, "1h", limit=50)
+        if not klines:
+            return {"is_valid": False, "reason": "failed to fetch klines", "r_r_ratio": 0}
+
+        normalized = [
+            {"high": row[2], "low": row[3]}
+            for row in klines
+            if isinstance(row, (list, tuple)) and len(row) >= 4
+        ]
+        return assess_trade_setup(symbol, direction, entry_price, stop_loss, normalized)
 
     def _score_market(self, symbol: str) -> tuple[dict, dict]:
         try:
@@ -516,6 +615,7 @@ class Scanner:
                 experiences=signal.get("experience_context", []),
                 macro_context=macro_context,
                 market_state=market_state,
+                agent_reasoning=(signal.get("agent_decision") or {}).get("reasoning"),
             )
         except Exception:
             pass

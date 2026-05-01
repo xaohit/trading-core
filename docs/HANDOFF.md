@@ -35,6 +35,21 @@ Remaining Agent gaps:
 - `agent_framework.MakimaAgent.make_decision()` is still a placeholder. The 7x24 loop exists, but autonomous decision execution logic has not been implemented there.
 - Live trading must stay disabled until a separate safety pass is completed.
 
+## 2026-05-01 Agent Gate Update
+
+The live scanner is no longer a pure rule-to-open pipeline:
+- Rules still generate candidates.
+- The best candidate must pass `AgentDecisionGate` before paper execution.
+- The gate uses signal score, signal strength, retrieved experience outcomes, and crowding/overheat tags to produce an Agent-style approval/rejection with conviction and reasoning.
+- Approved candidates then pass a local TA/RR check through `ta_checker.assess_trade_setup()` before opening.
+- Rejections are recorded as `agent_reject` decisions for later review.
+
+New files:
+- `agent_decision.py`: deterministic local Agent gate. Replace or wrap this when Hermes API is connected.
+- `tests/smoke_agent_gate.py`: verifies approval, memory-based rejection, and stop-loss planning.
+
+This keeps the user's intended architecture: rules find opportunities, Agent judgment decides, local hard rules enforce safety.
+
 ## Mission
 
 `trading-core` is a paper-first autonomous crypto futures trading system for Binance USD-M. All phases 1-6 of the refactor plan are complete. The system runs paper trading only.

@@ -407,6 +407,28 @@ Verification:
 
 Important caveat:
 - The Agent learning architecture is now coherent at the interface/storage level, but Hermes is not yet wired as a real API client and `MakimaAgent.make_decision()` remains a placeholder.
+
+## 2026-05-01 Agent Gate Alignment
+
+Implemented:
+- Added `agent_decision.py` with `AgentDecisionGate`.
+- Updated `scanner.py` so strategy rules produce candidates, but the chosen candidate must pass Agent approval before execution.
+- Agent approval considers base score, signal strength, retrieved experience outcomes, and overheated/crowded tags.
+- Added local TA/RR enforcement before paper execution.
+- Added `agent_reject` to decision journaling so rejected Agent decisions become reviewable memory.
+- Added Agent decision context to trade `pre_analysis`.
+- Added `tests/smoke_agent_gate.py`.
+
+Design intent:
+- Preserve the user's MAKIMA/Hermes direction: rules filter the market, Agent judgment decides, local hard rules enforce safety, every decision is journaled for future review.
+- Hermes is still not wired as the live decision provider. The current gate is deterministic and local so the system remains runnable without token spend.
+
+Verified:
+- `py_compile`: `config.py`, `scanner.py`, `executor.py`, `agent_decision.py`, `agent_tools.py`, `agent_framework.py`, `main_agent.py`, `ta_checker.py`
+- `tests/smoke_agent_gate.py`: `AGENT_GATE_SMOKE_OK`
+- `tests/smoke_phase7a.py`: `PHASE7A_SMOKE_OK`
+- `tests/smoke_decision_memory.py`: `DECISION_MEMORY_SMOKE_OK`
+- `tests/smoke_phase7e.py`: `PHASE7E_SMOKE_OK`
 ## Current Next Step
 **Phase 9: Deployment & Tuning.**
 - The system is now structurally complete (Phases 1-8).
