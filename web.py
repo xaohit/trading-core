@@ -94,6 +94,7 @@ def api_dashboard():
                 "sl_pct": pre.get("sl_pct"),
                 "tp_pct": pre.get("tp_pct"),
                 "signal_type": pre.get("type", "-"),
+                "agent_decision": pre.get("agent_decision", {}),
                 "remaining_pct": remaining,
                 "tp1_price": pos.get("tp1_price"),
                 "tp1_done": pos.get("tp1_done", 0),
@@ -112,6 +113,15 @@ def api_dashboard():
         try:
             from social_heat import get_heat_leaderboard
             heat_lb = get_heat_leaderboard(top_n=10)
+        except Exception:
+            pass
+
+        decisions = []
+        experiences = []
+        try:
+            from decision_memory import DecisionMemory
+            decisions = DecisionMemory.recent_decisions(12)
+            experiences = DecisionMemory.recent_experiences(8)
         except Exception:
             pass
 
@@ -134,6 +144,10 @@ def api_dashboard():
             },
             "heat_leaderboard": heat_lb,
             "evolved_params": _get_evolved_params(),
+            "decision_memory": {
+                "decisions": decisions,
+                "experiences": experiences,
+            },
         }
     return _cached("dashboard", 2.0, compute)
 
@@ -1015,9 +1029,458 @@ setInterval(load, 3000);
 """
 
 
+AGENT_WORKBENCH_HTML = """<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trading Core Agent Workbench</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #101114;
+  --panel: #181a20;
+  --panel-2: #20232b;
+  --line: #2b303a;
+  --text: #eef1f5;
+  --muted: #9aa3b2;
+  --soft: #c7ced9;
+  --yellow: #f2b705;
+  --green: #21c77a;
+  --red: #ef476f;
+  --blue: #4ea1ff;
+  --cyan: #30c7d8;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 13px;
+}
+button { font: inherit; }
+.topbar {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 22px;
+  background: #15171c;
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+.brand { display: flex; flex-direction: column; gap: 3px; }
+.brand strong { font-size: 18px; letter-spacing: 0; }
+.brand span { color: var(--muted); font-size: 12px; }
+.top-actions { display: flex; align-items: center; gap: 10px; }
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--soft);
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px 10px;
+}
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.dot.on { background: var(--green); box-shadow: 0 0 8px rgba(33,199,122,.7); }
+.btn {
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+  border-radius: 6px;
+  padding: 8px 11px;
+  cursor: pointer;
+}
+.btn.primary { background: var(--yellow); border-color: var(--yellow); color: #171717; font-weight: 700; }
+.btn.danger { color: var(--red); border-color: rgba(239,71,111,.45); }
+.layout {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr) 360px;
+  gap: 14px;
+  padding: 14px;
+  max-width: 1680px;
+  margin: 0 auto 36px;
+}
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.panel + .panel { margin-top: 14px; }
+.panel-head {
+  min-height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+}
+.panel-title { font-weight: 700; }
+.panel-sub { color: var(--muted); font-size: 12px; }
+.panel-body { padding: 14px; }
+.metrics { display: grid; gap: 10px; }
+.metric {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  padding: 12px;
+}
+.metric label {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+  margin-bottom: 6px;
+}
+.metric strong { font-size: 22px; line-height: 1; }
+.metric small { display: block; margin-top: 5px; color: var(--muted); }
+.green { color: var(--green); }
+.red { color: var(--red); }
+.yellow { color: var(--yellow); }
+.blue { color: var(--blue); }
+.pipeline {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+.stage {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  min-height: 82px;
+  padding: 10px;
+}
+.stage b { display: block; font-size: 12px; margin-bottom: 8px; }
+.stage span { color: var(--muted); font-size: 11px; line-height: 1.45; }
+.stage.active { border-color: rgba(242,183,5,.75); }
+.stage.good { border-color: rgba(33,199,122,.45); }
+.table-wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th {
+  color: var(--muted);
+  font-size: 11px;
+  text-align: left;
+  font-weight: 600;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+}
+td {
+  padding: 10px;
+  border-bottom: 1px solid #252a33;
+  vertical-align: top;
+}
+tr:last-child td { border-bottom: none; }
+.symbol { font-weight: 800; }
+.muted { color: var(--muted); }
+.chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  border-radius: 5px;
+  padding: 3px 7px;
+  font-size: 11px;
+  color: var(--soft);
+  margin: 0 4px 4px 0;
+}
+.chip.green { border-color: rgba(33,199,122,.4); color: var(--green); }
+.chip.red { border-color: rgba(239,71,111,.4); color: var(--red); }
+.chip.yellow { border-color: rgba(242,183,5,.45); color: var(--yellow); }
+.timeline { display: grid; gap: 8px; }
+.event {
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  border-radius: 7px;
+  padding: 10px;
+}
+.event-top { display: flex; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+.event-reason { color: var(--soft); line-height: 1.45; overflow-wrap: anywhere; }
+.heat-list { display: grid; gap: 8px; }
+.heat-row {
+  display: grid;
+  grid-template-columns: 72px 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+.bar { height: 7px; background: #2b303a; border-radius: 999px; overflow: hidden; }
+.bar i { display: block; height: 100%; background: var(--yellow); }
+.empty {
+  color: var(--muted);
+  padding: 24px;
+  text-align: center;
+}
+.chart-box { height: 180px; }
+.footer {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  padding: 7px 14px;
+  color: var(--muted);
+  background: #15171c;
+  border-top: 1px solid var(--line);
+  font-size: 12px;
+}
+@media (max-width: 1180px) {
+  .layout { grid-template-columns: 1fr; }
+  .pipeline { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .topbar { height: auto; align-items: flex-start; gap: 12px; flex-direction: column; padding: 14px; }
+}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <strong>Trading Core Agent Workbench</strong>
+    <span>纸交易优先 · 决策留痕 · Agent 学习闭环</span>
+  </div>
+  <div class="top-actions">
+    <span class="status-pill"><i id="scanDot" class="dot"></i><span id="scanStatus">待机</span></span>
+    <button class="btn primary" id="scanBtn" onclick="triggerScan()">手动扫描</button>
+    <button class="btn danger" onclick="closeAll()">全部平仓</button>
+  </div>
+</header>
+
+<main class="layout">
+  <aside>
+    <section class="panel">
+      <div class="panel-head"><div><div class="panel-title">账户</div><div class="panel-sub" id="updatedAt">加载中</div></div></div>
+      <div class="panel-body metrics">
+        <div class="metric"><label>权益</label><strong id="equity">-</strong><small id="closedPnl">已实现 -</small></div>
+        <div class="metric"><label>余额</label><strong class="yellow" id="balance">-</strong><small>纸交易账户</small></div>
+        <div class="metric"><label>浮动盈亏</label><strong id="unrealPnl">-</strong><small id="openCount">持仓 -</small></div>
+      </div>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><div class="panel-title">运行状态</div></div>
+      <div class="panel-body metrics">
+        <div class="metric"><label>扫描轮次</label><strong id="scanRound">-</strong><small id="scanLast">上次扫描 -</small></div>
+        <div class="metric"><label>胜率</label><strong class="green" id="winRate">-</strong><small id="tradeStats">交易 -</small></div>
+      </div>
+    </section>
+  </aside>
+
+  <section>
+    <section class="panel">
+      <div class="panel-head">
+        <div><div class="panel-title">决策流水线</div><div class="panel-sub">规则找机会，Agent 做判断，硬风控兜底</div></div>
+      </div>
+      <div class="panel-body">
+        <div class="pipeline">
+          <div class="stage good"><b>Signal</b><span>资金费率、暴涨暴跌、社交热度发现候选</span></div>
+          <div class="stage good"><b>Context</b><span>OI、LSR、taker、盘口、ATR 形成市场标签</span></div>
+          <div class="stage active"><b>Pipeline</b><span>环境、分数、入场质量、账户风险</span></div>
+          <div class="stage active"><b>Agent Gate</b><span>结合经验库输出 conviction 与 trade/wait</span></div>
+          <div class="stage"><b>TA/RR</b><span>检查技术结构，要求 R/R >= 1.5</span></div>
+          <div class="stage"><b>Memory</b><span>记录开仓和拒绝，24h 后复盘</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><div><div class="panel-title">持仓</div><div class="panel-sub" id="positionSubtitle">暂无持仓</div></div></div>
+      <div class="table-wrap" id="positionsPanel"><div class="empty">暂无持仓</div></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><div><div class="panel-title">最近信号与决策</div><div class="panel-sub">展示每个信号最终被哪一层处理</div></div></div>
+      <div class="table-wrap" id="signalsPanel"><div class="empty">暂无信号</div></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head"><div class="panel-title">权益曲线</div></div>
+      <div class="panel-body"><div class="chart-box"><canvas id="equityChart"></canvas></div></div>
+    </section>
+  </section>
+
+  <aside>
+    <section class="panel">
+      <div class="panel-head"><div><div class="panel-title">Agent 记忆</div><div class="panel-sub">最近决策快照</div></div><button class="btn" onclick="reviewDue()">复盘到期</button></div>
+      <div class="panel-body timeline" id="decisionPanel"><div class="empty">暂无决策</div></div>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><div><div class="panel-title">经验库</div><div class="panel-sub">最近沉淀的经验</div></div></div>
+      <div class="panel-body timeline" id="experiencePanel"><div class="empty">暂无经验</div></div>
+    </section>
+    <section class="panel">
+      <div class="panel-head"><div><div class="panel-title">社交热度</div><div class="panel-sub">候选币线索</div></div></div>
+      <div class="panel-body heat-list" id="heatPanel"><div class="empty">暂无热度</div></div>
+    </section>
+  </aside>
+</main>
+
+<div class="footer" id="footer">加载中</div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const num = (v, d = 0) => Number.isFinite(Number(v)) ? Number(v) : d;
+const price = (v) => v ? Number(v).toPrecision(6) : '-';
+const money = (v) => `${num(v).toFixed(2)} U`;
+const signedMoney = (v) => `${num(v) >= 0 ? '+' : ''}${num(v).toFixed(4)} U`;
+const pct = (v) => `${num(v) >= 0 ? '+' : ''}${num(v).toFixed(2)}%`;
+const clsPnL = (v) => num(v) >= 0 ? 'green' : 'red';
+const esc = (v) => String(v ?? '').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+let equityChart = null;
+
+function chip(text, cls = '') {
+  return `<span class="chip ${cls}">${esc(text)}</span>`;
+}
+
+function actionClass(action) {
+  if (action === 'opened' || action === 'target_hit' || action === 'direction_correct') return 'green';
+  if ((action || '').includes('reject') || action === 'invalidated' || action === 'direction_wrong') return 'red';
+  return 'yellow';
+}
+
+function render(data) {
+  $('equity').textContent = money(data.equity);
+  $('balance').textContent = money(data.balance);
+  $('closedPnl').textContent = `已实现 ${signedMoney(data.closed_pnl || 0)}`;
+  const unreal = (data.positions || []).reduce((s, p) => s + num(p.pnl_usd), 0);
+  $('unrealPnl').textContent = signedMoney(unreal);
+  $('unrealPnl').className = clsPnL(unreal);
+  $('openCount').textContent = `持仓 ${data.positions.length}`;
+  $('scanRound').textContent = data.scanner?.round || 0;
+  $('scanLast').textContent = `上次扫描 ${data.scanner?.last_scan || '-'}`;
+  $('winRate').textContent = data.stats?.total ? `${num(data.stats.win_rate).toFixed(1)}%` : '-';
+  $('tradeStats').textContent = `交易 ${data.stats?.total || 0} · PnL ${signedMoney(data.stats?.pnl_usd || 0)}`;
+  $('updatedAt').textContent = data.updated_at || '-';
+  $('footer').textContent = `更新 ${data.updated_at || '-'} · 每 3 秒刷新 · 当前为纸交易工作台`;
+
+  const running = Boolean(data.scanner?.last_scan);
+  $('scanDot').className = running ? 'dot on' : 'dot';
+  $('scanStatus').textContent = running ? '运行中' : '待机';
+
+  renderPositions(data.positions || []);
+  renderSignals(data.scanner?.latest_signals || []);
+  renderMemory(data.decision_memory || {});
+  renderHeat(data.heat_leaderboard || []);
+  renderChart(data.equity_curve || []);
+}
+
+function renderPositions(positions) {
+  $('positionSubtitle').textContent = positions.length ? `${positions.length} 个开放仓位` : '暂无持仓';
+  if (!positions.length) {
+    $('positionsPanel').innerHTML = '<div class="empty">暂无持仓</div>';
+    return;
+  }
+  $('positionsPanel').innerHTML = `<table><thead><tr>
+    <th>币种</th><th>方向</th><th>价格</th><th>风控</th><th>Agent</th><th>浮盈亏</th><th></th>
+  </tr></thead><tbody>${positions.map(p => {
+    const ad = p.agent_decision || {};
+    return `<tr>
+      <td><div class="symbol">${esc(p.symbol)}</div><div class="muted">${esc(p.signal_type || '-')}</div></td>
+      <td>${chip(p.direction === 'long' ? '做多' : '做空', p.direction === 'long' ? 'green' : 'red')}</td>
+      <td><div>入场 ${price(p.entry_price)}</div><div class="muted">当前 ${price(p.current_price)}</div></td>
+      <td><div>${chip('SL ' + price(p.stop_loss), 'red')}</div><div>${chip('TP1 ' + price(p.tp1_price), p.tp1_done ? 'green' : '')}${chip('TP2 ' + price(p.tp2_price), p.tp2_done ? 'green' : '')}</div></td>
+      <td><div>${chip('conv ' + (ad.conviction ?? '-'), ad.approved ? 'green' : 'yellow')}</div><div class="muted">${esc(ad.reasoning || '-')}</div></td>
+      <td><strong class="${clsPnL(p.pnl_usd)}">${signedMoney(p.pnl_usd)}</strong><div class="${clsPnL(p.pnl_pct)}">${pct(p.pnl_pct)}</div></td>
+      <td><button class="btn danger" onclick="closePos(${p.id})">平仓</button></td>
+    </tr>`;
+  }).join('')}</tbody></table>`;
+}
+
+function renderSignals(signals) {
+  if (!signals.length) {
+    $('signalsPanel').innerHTML = '<div class="empty">暂无信号</div>';
+    return;
+  }
+  $('signalsPanel').innerHTML = `<table><thead><tr>
+    <th>时间</th><th>币种</th><th>信号</th><th>分数</th><th>结果</th><th>标签</th>
+  </tr></thead><tbody>${signals.map(s => `<tr>
+    <td class="muted">${esc(s.scanned_at || '-')}</td>
+    <td><div class="symbol">${esc(s.symbol)}</div><div class="muted">${esc(s.direction || '-')}</div></td>
+    <td>${chip(s.signal_type || '-', s.strength === 'S' ? 'green' : s.strength === 'B' ? 'yellow' : '')}</td>
+    <td><strong>${s.score ?? '-'}</strong><div class="muted">${esc(s.verdict || '-')}</div></td>
+    <td>${chip(s.action || '-', actionClass(s.action))}<div class="muted">${esc(s.result || '')}</div></td>
+    <td>${(s.tags || []).slice(0, 5).map(t => chip(t)).join('')}</td>
+  </tr>`).join('')}</tbody></table>`;
+}
+
+function renderMemory(memory) {
+  const decisions = memory.decisions || [];
+  const experiences = memory.experiences || [];
+  $('decisionPanel').innerHTML = decisions.length ? decisions.slice(0, 8).map(d => `
+    <div class="event">
+      <div class="event-top"><strong>${esc(d.symbol)} · ${esc(d.action)}</strong>${chip(d.status || '-', actionClass(d.status))}</div>
+      <div>${chip(d.signal_type || '-')}${chip('conv ' + (d.conviction ?? '-'))}${chip(d.direction || '-')}</div>
+      <div class="event-reason">${esc(d.reasoning || d.agent_reasoning || '-')}</div>
+    </div>`).join('') : '<div class="empty">暂无决策</div>';
+  $('experiencePanel').innerHTML = experiences.length ? experiences.slice(0, 6).map(e => `
+    <div class="event">
+      <div class="event-top"><strong>${esc(e.symbol || '-')}</strong>${chip(e.outcome_label || '-', actionClass(e.outcome_label))}</div>
+      <div>${chip(e.signal_type || '-')}</div>
+      <div class="event-reason">${esc(e.lesson || '-')}</div>
+    </div>`).join('') : '<div class="empty">暂无经验</div>';
+}
+
+function renderHeat(items) {
+  if (!items.length) {
+    $('heatPanel').innerHTML = '<div class="empty">暂无热度</div>';
+    return;
+  }
+  const max = Math.max(...items.map(i => num(i.score || i.heat_score || i.heat || 0)), 1);
+  $('heatPanel').innerHTML = items.slice(0, 10).map(i => {
+    const score = num(i.score || i.heat_score || i.heat || 0);
+    const sym = i.symbol || i.token || '-';
+    return `<div class="heat-row"><strong>${esc(sym)}</strong><div class="bar"><i style="width:${Math.max(4, score / max * 100)}%"></i></div><span class="muted">${score.toFixed(1)}</span></div>`;
+  }).join('');
+}
+
+function renderChart(curve) {
+  const canvas = $('equityChart');
+  if (!canvas || curve.length < 2) return;
+  if (equityChart) equityChart.destroy();
+  const first = num(curve[0]);
+  const last = num(curve[curve.length - 1]);
+  const color = last >= first ? '#21c77a' : '#ef476f';
+  equityChart = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: { labels: curve.map((_, i) => i), datasets: [{ data: curve, borderColor: color, backgroundColor: color + '22', fill: true, tension: .32, pointRadius: 0, borderWidth: 2 }] },
+    options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { x: { display: false }, y: { grid: { color: '#2b303a' }, ticks: { color: '#9aa3b2' } } } }
+  });
+}
+
+async function load() {
+  const resp = await fetch('/api/dashboard');
+  render(await resp.json());
+}
+async function closePos(id) {
+  if (!confirm(`确认平仓 #${id}？`)) return;
+  await fetch('/api/close/' + id);
+  load();
+}
+async function closeAll() {
+  if (!confirm('确认全部平仓？')) return;
+  await fetch('/api/close-all');
+  load();
+}
+async function triggerScan() {
+  const btn = $('scanBtn');
+  btn.disabled = true;
+  btn.textContent = '扫描中';
+  try { await fetch('/api/scan'); await load(); }
+  finally { btn.disabled = false; btn.textContent = '手动扫描'; }
+}
+async function reviewDue() {
+  await fetch('/api/decision-memory/review-due');
+  load();
+}
+load();
+setInterval(load, 3000);
+</script>
+</body>
+</html>
+"""
+
+
 @app.get("/")
 def index():
-    return HTMLResponse(content=HTML, media_type="text/html")
+    return HTMLResponse(content=AGENT_WORKBENCH_HTML, media_type="text/html")
 
 
 @app.get("/api/scan")
