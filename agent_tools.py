@@ -11,9 +11,10 @@ try:
     from .signals import analyze
     from .decision_memory import DecisionMemory
     from .market_state import classify_market_state
-    from .market import Market
-    from .strategies.detectors import detect_all
-    from .config import DECISION_REVIEW_HORIZON_HOURS
+from .market import Market
+from .strategies.detectors import detect_all
+from .config import DECISION_REVIEW_HORIZON_HOURS
+from .ta_checker import assess_trade_setup
 except ImportError:
     from market_snapshot import get_market_snapshot
     from signals import analyze
@@ -225,6 +226,24 @@ def run_monte_carlo_analysis(
     except Exception as e:
         return {"error": f"Monte Carlo failed: {str(e)}"}
 
+
+def validate_trade_setup(
+    symbol: str,
+    direction: str,
+    entry_price: float,
+    stop_loss: float
+) -> dict:
+    """
+    Tool: Technical Validation Check.
+    Analyzes recent market structure to ensure the trade has a valid setup and Risk/Reward > 1.5.
+    
+    The Agent MUST call this before opening any trade.
+    """
+    klines = Market.klines(symbol, "1h", limit=50)
+    if not klines:
+        return {"error": "Failed to fetch klines for analysis"}
+        
+    return assess_trade_setup(symbol, direction, entry_price, stop_loss, klines)
 
 def inject_historical_experience(symbol: str, start: str, end: str) -> dict:
     """

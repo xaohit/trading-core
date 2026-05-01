@@ -14,7 +14,8 @@ from agent_tools import (
     record_agent_decision,
     review_due_decisions,
     get_experience_library,
-    store_reflection
+    store_reflection,
+    validate_trade_setup # New: TA Validation
 )
 from db.connection import init_db
 from config import DECISION_REVIEW_HORIZON_HOURS
@@ -110,9 +111,10 @@ class MakimaAgent:
         决策点。
         Hermes 应该重写或在此处注入逻辑：基于数据判断 open_long, open_short, 还是 wait。
         """
-        # 默认逻辑：如果信心度不够，就只是观察。
-        # 实际使用时，Hermes 会分析 market_data 并调用 record_agent_decision
-        logger.debug(f"🧠 Thinking about {symbol}... (Waiting for Agent Logic)")
+        # 🛑 强制约束 (Hard Constraint):
+        # 在记录决策前，必须先调用 validate_trade_setup 检查盈亏比和技术面结构。
+        # 如果 R/R < 1.5，强制放弃交易。
+        logger.debug(f"🧠 Thinking about {symbol}... (Waiting for Agent Logic & TA Check)")
 
     # ==========================================================
     # 3. 自动反思机制 (Phase 8C)
