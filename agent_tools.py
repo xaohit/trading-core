@@ -186,6 +186,46 @@ def adjust_strategy_params(symbol: str, signal_type: str, new_params: dict, reas
     return {"status": "success", "message": f"Updated {signal_type} with {new_params}"}
 
 
+def run_monte_carlo_analysis(
+    symbol: str = None,
+    start: str = "2025-01-01",
+    end: str = "2025-04-01",
+    num_simulations: int = 1000
+) -> dict:
+    """
+    Tool: Run Backtest and then perform Monte Carlo Simulation.
+    Returns probability distributions of outcomes to check strategy robustness.
+    """
+    # 1. Run Backtest
+    backtest_res = run_backtest(symbol, start, end)
+    if "error" in backtest_res or "trades" not in backtest_res:
+        return {"error": "Backtest failed or no trades"}
+        
+    trades = backtest_res.get("trades", [])
+    if len(trades) < 10:
+        return {"error": "Not enough trades for meaningful simulation"}
+        
+    # 2. Run Monte Carlo
+    try:
+        from .monte_carlo import run_monte_carlo
+        mc_result = run_monte_carlo(
+            trades=trades,
+            num_simulations=num_simulations,
+            risk_per_trade_pct=0.02, # Default risk
+            initial_balance=10000.0
+        )
+        return {
+            "status": "success",
+            "backtest_summary": {
+                "trades_count": len(trades),
+                "win_rate": backtest_res.get("win_rate")
+            },
+            "monte_carlo": mc_result
+        }
+    except Exception as e:
+        return {"error": f"Monte Carlo failed: {str(e)}"}
+
+
 def inject_historical_experience(symbol: str, start: str, end: str) -> dict:
     """
     Tool: Run a backtest and automatically inject the results as "Experience".
