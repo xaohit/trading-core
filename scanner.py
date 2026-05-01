@@ -7,7 +7,6 @@ try:
     from .config import (
         MAX_OPEN_POSITIONS, EXCLUDE_SYMBOLS, MIN_VOLUME_M, COOLDOWN_HOURS,
         TP1_CLOSE_PCT, TP2_CLOSE_PCT, SOCIAL_HEAT_ENABLED, HEAT_CANDIDATE_N,
-        ENTRY_QUALITY_MIN_PASSED, ENTRY_QUALITY_MIN_SCORE,
     )
     from .market import Market
     from .state import State
@@ -26,11 +25,11 @@ try:
     from .market_state import classify_market_state
     from .agent_decision import AgentDecisionGate
     from .ta_checker import assess_trade_setup
+    from .decision_pipeline import DecisionPipeline
 except ImportError:
     from config import (
         MAX_OPEN_POSITIONS, EXCLUDE_SYMBOLS, MIN_VOLUME_M, COOLDOWN_HOURS,
         TP1_CLOSE_PCT, TP2_CLOSE_PCT, SOCIAL_HEAT_ENABLED, HEAT_CANDIDATE_N,
-        ENTRY_QUALITY_MIN_PASSED, ENTRY_QUALITY_MIN_SCORE,
     )
     from market import Market
     from state import State
@@ -49,6 +48,7 @@ except ImportError:
     from market_state import classify_market_state
     from agent_decision import AgentDecisionGate
     from ta_checker import assess_trade_setup
+    from decision_pipeline import DecisionPipeline
 
 
 TZ_UTC8 = timezone(timedelta(hours=8))
@@ -66,6 +66,7 @@ class Scanner:
         init_db()
         self.state = State()
         self.risk = RiskManager(self.state)
+        self.pipeline = DecisionPipeline(self.risk)
         self._now = datetime.now(TZ_UTC8)
 
     def monitor(self) -> list:
@@ -281,70 +282,18 @@ class Scanner:
                 symbol, best, signal_analysis, limit=3
             )
 
-            if not passed:
-                TradeDB.record_signal(
-                    _now_str(), symbol, best, score, "env_reject",
-                    analysis.get("verdict"), snapshot, signal_analysis
-                )
-                self._remember_decision(
-                    symbol, "env_reject", best, snapshot,
-                    signal_analysis, analysis.get("verdict")
-                )
-                continue
-
-            if self._reject_scored_signal(signal_analysis):
-                TradeDB.record_signal(
-                    _now_str(), symbol, best, composite_score, "score_reject",
-                    signal_analysis.get("verdict"), snapshot, signal_analysis
-                )
-                self._remember_decision(
-                    symbol, "score_reject", best, snapshot,
-                    signal_analysis, signal_analysis.get("verdict")
-                )
-                continue
-
-            # Entry quality gate (Phase 7A): hard vetoes + 7-item checklist
-            veto_reason = self._entry_quality_veto(signal_analysis, snapshot)
-            if veto_reason:
-                TradeDB.record_signal(
-                    _now_str(), symbol, best, composite_score, "entry_veto",
-                    signal_analysis.get("verdict"), snapshot, signal_analysis
-                )
-                self._remember_decision(
-                    symbol, "entry_veto", best, snapshot,
-                    signal_analysis, veto_reason
-                )
-                continue
-
-            # Entry quality score
-            quality, passed_count, quality_notes = self.risk.evaluate_entry_quality(
-                symbol, best, signal_analysis
+            pipeline_decision = self.pipeline.evaluate(
+                symbol=symbol,
+                signal=best,
+                snapshot=snapshot,
+                analysis=signal_analysis,
+                env_passed=passed,
+                env_analysis=analysis,
+                env_score=score,
             )
-            best["entry_quality"] = quality
-            best["entry_quality_notes"] = quality_notes
-
-            if passed_count < ENTRY_QUALITY_MIN_PASSED or composite_score < ENTRY_QUALITY_MIN_SCORE:
-                TradeDB.record_signal(
-                    _now_str(), symbol, best, composite_score, "quality_reject",
-                    signal_analysis.get("verdict"), snapshot, signal_analysis
-                )
-                self._remember_decision(
-                    symbol, "quality_reject", best, snapshot,
-                    signal_analysis, f"quality={quality}, passed={passed_count}"
-                )
-                continue
-
-            # 风控检查
-            allowed, risk_reason = self.risk.check_account_risk(symbol)
-            if not allowed:
-                TradeDB.record_signal(
-                    _now_str(), symbol, best, composite_score, "risk_reject",
-                    risk_reason, snapshot, signal_analysis
-                )
-                self._remember_decision(
-                    symbol, "risk_reject", best, snapshot,
-                    signal_analysis, risk_reason
-                )
+            best["pipeline_decision"] = pipeline_decision.__dict__
+            if not pipeline_decision.ok:
+                self._record_reject(symbol, best, snapshot, signal_analysis, pipeline_decision)
                 continue
 
             all_signals.append(best)
@@ -432,6 +381,26 @@ class Scanner:
             "opened": 1,
             "heat_used": heat_used,
         }
+
+    def _record_reject(self, symbol: str, signal: dict, snapshot: dict, analysis: dict, decision):
+        TradeDB.record_signal(
+            _now_str(),
+            symbol,
+            signal,
+            decision.score,
+            decision.action,
+            decision.reason,
+            snapshot,
+            analysis,
+        )
+        self._remember_decision(
+            symbol,
+            decision.action,
+            signal,
+            snapshot,
+            analysis,
+            decision.reason,
+        )
 
     def _agent_gate(self, signal: dict) -> dict:
         symbol = signal["symbol"]

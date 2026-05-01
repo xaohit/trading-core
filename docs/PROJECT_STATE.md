@@ -429,6 +429,31 @@ Verified:
 - `tests/smoke_phase7a.py`: `PHASE7A_SMOKE_OK`
 - `tests/smoke_decision_memory.py`: `DECISION_MEMORY_SMOKE_OK`
 - `tests/smoke_phase7e.py`: `PHASE7E_SMOKE_OK`
+
+## 2026-05-01 Decision Pipeline Refactor
+
+Implemented:
+- Added `decision_pipeline.py`.
+- Moved pre-Agent filtering out of `scanner.py` into `DecisionPipeline`.
+- Scanner now has clearer responsibilities: candidate discovery, scoring context attachment, pipeline call, ranking, Agent gate, execution, journaling.
+- Added `tests/smoke_decision_pipeline.py`.
+
+Decision boundary:
+- `DecisionPipeline`: deterministic pre-Agent quality/risk screening.
+- `AgentDecisionGate`: experience-aware final trade/wait judgment.
+- `ta_checker`: hard R/R and market-structure guard.
+- `Executor`: paper execution and position management only.
+
+Verified:
+- Full core `py_compile` passed including `decision_pipeline.py`.
+- `tests/smoke_decision_pipeline.py`: `DECISION_PIPELINE_SMOKE_OK`
+- `tests/smoke_agent_gate.py`: `AGENT_GATE_SMOKE_OK`
+- `tests/smoke_phase4b.py`: `PHASE4B_SMOKE_OK`
+- `tests/smoke_phase5.py`: `PHASE5_SMOKE_OK`
+- `tests/smoke_phase6.py`: `PHASE6_SMOKE_OK`
+- `tests/smoke_phase7a.py`: `PHASE7A_SMOKE_OK`
+- `tests/smoke_phase7e.py`: `PHASE7E_SMOKE_OK`
+- `tests/smoke_decision_memory.py`: `DECISION_MEMORY_SMOKE_OK`
 ## Current Next Step
 **Phase 9: Deployment & Tuning.**
 - The system is now structurally complete (Phases 1-8).

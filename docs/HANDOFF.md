@@ -50,6 +50,21 @@ New files:
 
 This keeps the user's intended architecture: rules find opportunities, Agent judgment decides, local hard rules enforce safety.
 
+## 2026-05-01 Pipeline Boundary Refactor
+
+The scanner was simplified to reduce judgment sprawl:
+- `decision_pipeline.py` owns the pre-Agent candidate checks: environment reject, score hard reject, entry veto, entry quality, and account risk.
+- `scanner.py` now orchestrates discovery, pipeline evaluation, ranking, Agent gate, and execution.
+- `agent_decision.py` remains the final Agent-style approval layer before TA/RR and paper execution.
+
+Current decision flow:
+```
+signal discovery -> DecisionPipeline -> ranking -> AgentDecisionGate -> TA/RR guard -> paper execution
+```
+
+New smoke:
+- `tests/smoke_decision_pipeline.py` verifies clean acceptance, hard score/tag rejection, quality rejection, and risk rejection.
+
 ## Mission
 
 `trading-core` is a paper-first autonomous crypto futures trading system for Binance USD-M. All phases 1-6 of the refactor plan are complete. The system runs paper trading only.
