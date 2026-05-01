@@ -84,6 +84,11 @@ def init_db():
             result TEXT
         )
     ''')
+    _ensure_column(c, "strategy_evolution", "signal_type", "TEXT")
+    _ensure_column(c, "strategy_evolution", "outcome", "TEXT")
+    _ensure_column(c, "strategy_evolution", "pnl_pct", "REAL")
+    _ensure_column(c, "strategy_evolution", "exit_reason", "TEXT")
+    _ensure_column(c, "strategy_evolution", "recorded_at", "INTEGER")
 
     # 每日统计
     c.execute('''
@@ -232,4 +237,9 @@ def _ensure_column(cursor, table: str, column: str, ddl: str):
     cursor.execute(f"PRAGMA table_info({table})")
     cols = {row["name"] for row in cursor.fetchall()}
     if column not in cols:
-        cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
+        try:
+            cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
+        except sqlite3.OperationalError as exc:
+            if "duplicate column name" in str(exc).lower():
+                return
+            raise

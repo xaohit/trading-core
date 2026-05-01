@@ -390,6 +390,23 @@ Backtest engine features:
 - The system is now structurally complete (Phases 1-8).
 - Hermes should run `inject_historical_experience` to build the base memory.
 - Start the Agent in simulation mode (`agent_framework.py`) to accumulate data.
+
+## 2026-05-01 Stabilization Pass
+
+Status:
+- Phase 8/9 agent files now compile and import.
+- Database migrations are idempotent for existing installs.
+- Closed-trade learning no longer points at missing `strategy_evolution` columns.
+- Agent reflections can now be persisted through `store_reflection()` into `experience_cases`.
+- Agent tool helpers support both package imports and root-directory script execution.
+
+Verification:
+- `py_compile` passed for core, web, backtest, memory, Agent, Monte Carlo, market-state, and TA checker modules.
+- Smoke tests passed: market snapshot, signals, phase4b, phase5, phase6, phase7a, phase7e, decision memory.
+- Agent import smoke passed: `agent_tools`, `agent_framework`, `main_agent`.
+
+Important caveat:
+- The Agent learning architecture is now coherent at the interface/storage level, but Hermes is not yet wired as a real API client and `MakimaAgent.make_decision()` remains a placeholder.
 ## Current Next Step
 **Phase 9: Deployment & Tuning.**
 - The system is now structurally complete (Phases 1-8).

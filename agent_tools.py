@@ -5,16 +5,17 @@ Exposes core system capabilities as tools for external agents (e.g. OpenClaw, He
 """
 import json
 import os
+import time
 
 try:
     from .market_snapshot import get_market_snapshot
     from .signals import analyze
     from .decision_memory import DecisionMemory
     from .market_state import classify_market_state
-from .market import Market
-from .strategies.detectors import detect_all
-from .config import DECISION_REVIEW_HORIZON_HOURS
-from .ta_checker import assess_trade_setup
+    from .market import Market
+    from .strategies.detectors import detect_all
+    from .config import DECISION_REVIEW_HORIZON_HOURS, STATE_PATH
+    from .ta_checker import assess_trade_setup
 except ImportError:
     from market_snapshot import get_market_snapshot
     from signals import analyze
@@ -22,7 +23,8 @@ except ImportError:
     from market_state import classify_market_state
     from market import Market
     from strategies.detectors import detect_all
-    from config import DECISION_REVIEW_HORIZON_HOURS
+    from config import DECISION_REVIEW_HORIZON_HOURS, STATE_PATH
+    from ta_checker import assess_trade_setup
 
 
 def get_market_analysis(symbol: str, macro_data: dict | None = None) -> dict:
@@ -66,6 +68,7 @@ def record_agent_decision(
     target_price: float | None = None,
     conviction: float = 50.0,
     reasoning: str = "",
+    reason: str | None = None,
     macro_context: dict | None = None,
     market_state: dict | None = None,
     agent_reasoning: str | None = None
@@ -85,6 +88,7 @@ def record_agent_decision(
     
     snapshot = get_market_snapshot(symbol)
     analysis = {"score": conviction, "verdict": "agent_manual", "tags": ["agent_decision"]}
+    final_reasoning = reasoning or reason or ""
     
     decision_id = DecisionMemory.record_decision(
         symbol=symbol,
@@ -92,10 +96,11 @@ def record_agent_decision(
         signal=signal,
         snapshot=snapshot,
         analysis=analysis,
+        result=final_reasoning,
         horizon_hours=DECISION_REVIEW_HORIZON_HOURS,
         macro_context=macro_context,
         market_state=market_state,
-        agent_reasoning=agent_reasoning
+        agent_reasoning=agent_reasoning or final_reasoning
     )
     
     return {"decision_id": decision_id, "status": "recorded"}
@@ -131,7 +136,11 @@ def run_backtest(symbol: str, start: str, end: str, sizing: str = "atr") -> dict
     """
     Tool: Run a backtest and (future) inject results into experience library.
     """
-    from .backtest import fetch_klines, BacktestEngine
+    try:
+        from .backtest import fetch_klines, BacktestEngine
+    except ImportError:
+        from backtest import fetch_klines, BacktestEngine
+
     klines = fetch_klines(symbol, "15m", start, end)
     if not klines:
         return {"error": "No data"}
@@ -156,10 +165,6 @@ def adjust_strategy_params(symbol: str, signal_type: str, new_params: dict, reas
         new_params: Dict of params to change, e.g., {"min_rate": -0.05, "sl_pct": 0.06}.
         reason: Why this change is being made (for logging).
     """
-    import json
-    from pathlib import Path
-    from config import STATE_PATH
-
     # Ensure the state file exists
     if not STATE_PATH.exists():
         STATE_PATH.write_text("{}")
@@ -208,7 +213,11 @@ def run_monte_carlo_analysis(
         
     # 2. Run Monte Carlo
     try:
-        from .monte_carlo import run_monte_carlo
+        try:
+            from .monte_carlo import run_monte_carlo
+        except ImportError:
+            from monte_carlo import run_monte_carlo
+
         mc_result = run_monte_carlo(
             trades=trades,
             num_simulations=num_simulations,
@@ -251,10 +260,76 @@ def inject_historical_experience(symbol: str, start: str, end: str) -> dict:
     Use this to give the Agent historical wisdom before live trading.
     """
     try:
-        from .experience_injector import inject_backtest_results
+        try:
+            from .experience_injector import inject_backtest_results
+        except ImportError:
+            from experience_injector import inject_backtest_results
+
         # We capture print output or just run it
         # Since it prints to console, we can return a success message
         inject_backtest_results(symbol, start, end)
         return {"status": "Injection complete", "message": "Check console for details."}
     except Exception as e:
         return {"error": str(e)}
+
+
+def store_reflection(
+    decision_id: int,
+    reflection_text: str,
+    tags: list[str] | None = None,
+    adjustment: dict | None = None,
+) -> dict:
+    """
+    Tool: Persist an LLM reflection as a reusable experience case.
+    This is the bridge from review failures into future context retrieval.
+    """
+    try:
+        try:
+            from .db.connection import get_db, init_db
+        except ImportError:
+            from db.connection import get_db, init_db
+
+        init_db()
+        decision = DecisionMemory.get_decision(decision_id)
+        if not decision:
+            return {"status": "error", "error": f"decision {decision_id} not found"}
+
+        tag_list = tags or ["agent_reflection"]
+        lesson = reflection_text.strip()
+        searchable = " | ".join(
+            str(part)
+            for part in [
+                decision.get("symbol"),
+                decision.get("signal_type"),
+                decision.get("direction"),
+                decision.get("reasoning"),
+                lesson,
+                " ".join(tag_list),
+            ]
+            if part
+        )
+
+        conn = get_db()
+        c = conn.cursor()
+        c.execute(
+            """
+            INSERT INTO experience_cases
+            (source_snapshot_id, symbol, signal_type, outcome_label, tags,
+             lesson, adjustment_json, searchable_text)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                decision_id,
+                decision.get("symbol"),
+                decision.get("signal_type"),
+                "llm_reflection",
+                json.dumps(tag_list, ensure_ascii=False),
+                lesson,
+                json.dumps(adjustment or {}, ensure_ascii=False),
+                searchable,
+            ),
+        )
+        conn.commit()
+        return {"status": "stored", "experience_id": c.lastrowid}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}

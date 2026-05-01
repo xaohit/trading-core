@@ -130,7 +130,7 @@ def run_agent_cycle(symbols: list[str]):
                     record_agent_decision(
                         symbol=symbol,
                         action="wait",
-                        reason=f"System Rejected: {validation.get('reason')}. Original Idea: {decision.get('hypothesis')}",
+                        reasoning=f"System Rejected: {validation.get('reason')}. Original Idea: {decision.get('hypothesis')}",
                         conviction=0
                     )
                     continue

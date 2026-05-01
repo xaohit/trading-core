@@ -1,6 +1,39 @@
 # Agent Handoff
 
-Last updated: 2026-04-30 23:30 UTC+8
+Last updated: 2026-05-01 00:30 UTC+8
+
+## 2026-05-01 Stabilization Notes
+
+Latest remote baseline: `b0cae95 Add main_agent.py with MAKIMA System Prompt and Agent Loop Logic`.
+
+Stabilized after the Phase 8/9 agent update:
+- `agent_tools.py` now imports cleanly in both package mode and script mode.
+- `record_agent_decision()` accepts the legacy `reason` alias and persists the Agent reasoning into the decision snapshot.
+- `store_reflection()` now exists and stores LLM reflection output as an `experience_cases` row.
+- `run_backtest()`, `run_monte_carlo_analysis()`, and `inject_historical_experience()` now have script-mode import fallbacks.
+- `db/connection.py` migrations are idempotent when a column already exists.
+- `strategy_evolution` now includes the columns expected by `Memory.record_outcome()`.
+- `main_agent.py` now calls `record_agent_decision()` with the correct `reasoning` parameter.
+
+Verified commands:
+```powershell
+..\trading-core\.venv\Scripts\python.exe -m py_compile config.py db\connection.py db\trades.py decision_memory.py scanner.py executor.py web.py social_heat.py reflection.py paper_balance.py realtime_monitor.py memory.py risk.py market_snapshot.py signals.py agent_tools.py agent_framework.py experience_injector.py market_state.py monte_carlo.py ta_checker.py main_agent.py backtest.py
+
+$env:PYTHONIOENCODING='utf-8'; $env:PYTHONPATH=(Get-Location).Path; ..\trading-core\.venv\Scripts\python.exe tests\smoke_market_snapshot.py
+$env:PYTHONIOENCODING='utf-8'; $env:PYTHONPATH=(Get-Location).Path; ..\trading-core\.venv\Scripts\python.exe tests\smoke_signals.py
+$env:PYTHONIOENCODING='utf-8'; $env:PYTHONPATH=(Get-Location).Path; ..\trading-core\.venv\Scripts\python.exe tests\smoke_phase4b.py
+$env:PYTHONIOENCODING='utf-8'; $env:PYTHONPATH=(Get-Location).Path; ..\trading-core\.venv\Scripts\python.exe tests\smoke_phase5.py
+$env:PYTHONIOENCODING='utf-8'; $env:PYTHONPATH=(Get-Location).Path; ..\trading-core\.venv\Scripts\python.exe tests\smoke_phase6.py
+$env:PYTHONIOENCODING='utf-8'; $env:PYTHONPATH=(Get-Location).Path; ..\trading-core\.venv\Scripts\python.exe tests\smoke_phase7a.py
+$env:PYTHONIOENCODING='utf-8'; $env:PYTHONPATH=(Get-Location).Path; ..\trading-core\.venv\Scripts\python.exe tests\smoke_phase7e.py
+$env:PYTHONIOENCODING='utf-8'; $env:PYTHONPATH=(Get-Location).Path; ..\trading-core\.venv\Scripts\python.exe tests\smoke_decision_memory.py
+$env:PYTHONIOENCODING='utf-8'; $env:PYTHONPATH=(Get-Location).Path; ..\trading-core\.venv\Scripts\python.exe -c "import agent_tools, agent_framework, main_agent; print('AGENT_IMPORT_OK')"
+```
+
+Remaining Agent gaps:
+- `main_agent.py` still uses a mock/manual Hermes response. Real Hermes/OpenAI-compatible API integration is not wired yet.
+- `agent_framework.MakimaAgent.make_decision()` is still a placeholder. The 7x24 loop exists, but autonomous decision execution logic has not been implemented there.
+- Live trading must stay disabled until a separate safety pass is completed.
 
 ## Mission
 
