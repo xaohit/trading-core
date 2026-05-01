@@ -7,6 +7,9 @@ import json
 import os
 import time
 
+SKILL_NAME = "trading-core"
+SKILL_VERSION = "0.2.0"
+
 try:
     from .market_snapshot import get_market_snapshot
     from .signals import analyze
@@ -29,6 +32,70 @@ except ImportError:
     from ta_checker import assess_trade_setup
     from semantic_radar import SemanticRadar
     from daily_reflection import build_daily_reflection_report
+
+
+def get_skill_manifest() -> dict:
+    """
+    Tool: Describe this repository as a Hermes/OpenClaw trading skill.
+    Agents should call this first to understand available tools and guardrails.
+    """
+    return {
+        "name": SKILL_NAME,
+        "version": SKILL_VERSION,
+        "role": "paper-first trading skill for market analysis, decision memory, validation, and reflection",
+        "operating_mode": "external_agent_calls_tools",
+        "live_trading": "disabled/not recommended",
+        "primary_agent_workflow": [
+            "get_skill_manifest",
+            "get_market_analysis",
+            "validate_trade_setup",
+            "record_agent_decision",
+            "review_due_decisions",
+            "store_reflection",
+            "get_daily_reflection_report",
+        ],
+        "tool_groups": {
+            "market_analysis": [
+                "get_market_analysis",
+                "get_experience_library",
+                "add_semantic_event",
+            ],
+            "decision_memory": [
+                "record_agent_decision",
+                "review_due_decisions",
+                "store_reflection",
+                "get_daily_reflection_report",
+            ],
+            "risk_validation": [
+                "validate_trade_setup",
+            ],
+            "research": [
+                "run_backtest",
+                "run_monte_carlo_analysis",
+                "inject_historical_experience",
+            ],
+            "evolution": [
+                "adjust_strategy_params",
+            ],
+        },
+        "guardrails": [
+            "paper trading only unless the human explicitly performs a separate live-trading safety review",
+            "record every material trade/wait decision",
+            "do not bypass local TA/RR, risk, and memory checks",
+            "default to wait when conviction is low or risk/reward is invalid",
+            "write failed-decision lessons back with store_reflection",
+        ],
+        "expected_decision_json": {
+            "action": "open_long | open_short | wait | close",
+            "conviction": "0-100",
+            "hypothesis": "why this setup may work",
+            "expected_path": "what price/market behavior should happen",
+            "stop_loss": "numeric price or null",
+            "target_price": "numeric price or null",
+            "invalidation_condition": "what proves the idea wrong",
+            "reasoning": "compact explanation using current context and past experiences",
+        },
+    }
 
 
 def get_market_analysis(symbol: str, macro_data: dict | None = None) -> dict:

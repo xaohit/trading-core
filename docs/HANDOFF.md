@@ -67,7 +67,7 @@ New smoke:
 
 ## 2026-05-01 Provider Architecture Refactor
 
-The project now has a concrete Hermes-ready decision boundary:
+The daemon/fallback path now has a concrete Hermes-ready decision boundary:
 - `decision_provider.py` defines `DecisionProvider`, `LocalDecisionProvider`, `HermesDecisionProvider`, and `EventTriggeredDecisionProvider`.
 - `scanner.py` calls `get_decision_provider()` instead of calling `AgentDecisionGate` directly.
 - `AgentDecisionGate` remains the deterministic local fallback.
@@ -84,11 +84,25 @@ Environment:
 New smoke:
 - `tests/smoke_decision_provider.py` verifies local hypothesis output, safe Hermes routing, semantic radar, and hypothesis risks.
 
+## 2026-05-01 Skill-First Correction
+
+The primary integration path is now explicit:
+- Hermes/MAKIMA should use this repo as a trading skill by importing `agent_tools.py`.
+- `decision_provider.py` is for the internal daemon/fallback path, not the main agent integration path.
+- `get_skill_manifest()` returns the tool list, expected decision JSON, and guardrails.
+- `docs/HERMES_SKILL_GUIDE.md` gives the recommended external-agent workflow.
+- `trading_core_skill.json` is the machine-readable skill manifest.
+
 ## Mission
 
-`trading-core` is a paper-first autonomous crypto futures trading system for Binance USD-M. All phases 1-6 of the refactor plan are complete. The system runs paper trading only.
+`trading-core` is a paper-first trading skill/toolkit for Hermes/MAKIMA/OpenClaw-style agents. It provides market analysis, risk validation, decision memory, reflection, backtesting, and paper execution tools. The system also has an autonomous daemon fallback, but the primary design is: external agents call `agent_tools.py`.
 
 **Core principle**: Keep live trading disabled. Make every decision auditable. Learn from outcomes.
+
+Primary skill docs:
+- `docs/HERMES_SKILL_GUIDE.md`
+- `trading_core_skill.json`
+- `agent_tools.get_skill_manifest()`
 
 ## System Architecture (Completed Pipeline)
 

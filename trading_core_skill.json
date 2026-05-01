@@ -1,0 +1,41 @@
+{
+  "name": "trading-core",
+  "version": "0.2.0",
+  "description": "Paper-first crypto futures trading skill for Hermes/MAKIMA-style agents.",
+  "entrypoint": "agent_tools.py",
+  "mode": "external_agent_toolkit",
+  "default_safety": "paper_trading_only",
+  "primary_guide": "docs/HERMES_SKILL_GUIDE.md",
+  "tools": {
+    "market_analysis": [
+      "get_skill_manifest",
+      "get_market_analysis",
+      "get_experience_library",
+      "add_semantic_event"
+    ],
+    "decision_memory": [
+      "record_agent_decision",
+      "review_due_decisions",
+      "store_reflection",
+      "get_daily_reflection_report"
+    ],
+    "validation": [
+      "validate_trade_setup"
+    ],
+    "research": [
+      "run_backtest",
+      "run_monte_carlo_analysis",
+      "inject_historical_experience"
+    ],
+    "evolution": [
+      "adjust_strategy_params"
+    ]
+  },
+  "guardrails": [
+    "Use as paper trading and research skill by default.",
+    "Record every material decision.",
+    "Validate trade setup before trade intent.",
+    "Default to wait when conviction or R/R is insufficient.",
+    "Use store_reflection after failed reviewed decisions."
+  ]
+}

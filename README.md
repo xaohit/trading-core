@@ -1,24 +1,33 @@
 # Trading Core
 
-一个面向加密货币合约市场的 **纸交易优先** AI 交易系统。它的目标不是做一套静态量化脚本，而是搭建一个可以持续留痕、复盘、积累经验，并逐步接入 Hermes/MAKIMA 进行判断的交易 Agent 底座。
+一个面向 Hermes / MAKIMA / OpenClaw 等 Agent 的 **纸交易优先交易 skill**。它不是让系统内部控制 Agent，而是给 Agent 提供市场分析、风控校验、决策记忆、复盘和纸交易执行工具。
 
 > 当前状态：可以用于纸交易、模拟观察、回测、决策记录和经验库积累。  
 > 不建议直接实盘。真实 Hermes API 与实盘安全闭环仍未完成。
 
 ## 项目定位
 
-Trading Core 的核心思想是：
+Trading Core 的核心思想是：**Hermes 是交易员，trading-core 是交易 skill。**
 
 ```text
-规则发现机会 -> 上下文过滤 -> Agent 判断 -> 硬风控校验 -> 纸交易执行 -> 24h 复盘 -> 经验沉淀
+Hermes / MAKIMA
+-> agent_tools.py
+-> 市场分析 / 风控校验 / 决策记录 / 复盘 / 经验库 / 纸交易
 ```
 
 系统里有两类智能：
 
 - **本地规则智能**：95% 的扫描、过滤、风控、回测和复盘都在本地执行，不依赖大模型 token。
-- **Agent 判断智能**：Hermes/MAKIMA 后续负责结合市场上下文、历史经验和复盘教训，做最终 trade/wait 判断。
+- **Agent 判断智能**：Hermes/MAKIMA 作为外部调用者，结合市场上下文、历史经验和复盘教训，做最终 trade/wait 判断。
 
-目前 Hermes 还没有作为真实 API 接入。仓库里先提供了确定性的 `AgentDecisionGate`，作为过渡版 Agent 判断层，保证系统在无 LLM 的情况下也能跑通。
+仓库里也保留了 daemon/fallback 模式：`scanner.py` 可以自动扫市场并用本地 `AgentDecisionGate` 做纸交易判断。但主设计仍然是外部 Agent 调用 `agent_tools.py`。
+
+Agent 使用说明见：
+
+```text
+docs/HERMES_SKILL_GUIDE.md
+trading_core_skill.json
+```
 
 ## 当前能力
 
@@ -88,7 +97,9 @@ signal discovery
 | Signal Discovery | `strategies/detectors.py` | 发现候选机会 |
 | Context Scoring | `signals.py`, `market_snapshot.py` | 计算市场质量分、标签、verdict |
 | Pre-Agent Pipeline | `decision_pipeline.py` | 环境过滤、质量过滤、账户风控 |
-| Decision Provider | `decision_provider.py` | 路由本地判断或未来 Hermes 判断 |
+| Skill Interface | `agent_tools.py` | Hermes/OpenClaw 直接调用的交易 skill 工具层 |
+| Skill Manifest | `trading_core_skill.json` | skill 元数据、工具分组和安全边界 |
+| Decision Provider | `decision_provider.py` | daemon/fallback 模式下路由本地判断或 Hermes 占位 |
 | Agent Gate | `agent_decision.py` | 本地 fallback，结合分数、强度、历史经验做 trade/wait 判断 |
 | Trade Hypothesis | `trade_hypothesis.py` | 结构化记录假设、预期路径、失效条件 |
 | Semantic Radar | `semantic_radar.py` | 接收新闻、宏观、KOL、Polymarket 等语义事件 |
@@ -239,7 +250,30 @@ python tests/smoke_phase7e.py
 
 ## Hermes / MAKIMA 接入方向
 
-未来 Hermes 应该作为 `DecisionProvider` 接入，而不是替代整套系统：
+Hermes 推荐直接把本项目当作 skill 使用：
+
+```python
+from agent_tools import (
+    get_skill_manifest,
+    get_market_analysis,
+    validate_trade_setup,
+    record_agent_decision,
+    review_due_decisions,
+    store_reflection,
+)
+```
+
+推荐工作流：
+
+1. `get_skill_manifest()` 读取工具能力和安全边界。
+2. `get_market_analysis(symbol)` 获取市场上下文和历史经验。
+3. Hermes 输出结构化交易假设。
+4. `validate_trade_setup()` 校验 R/R 和技术结构。
+5. `record_agent_decision()` 记录 trade/wait 判断。
+6. `review_due_decisions()` 回看到期判断。
+7. `store_reflection()` 把失败复盘写入经验库。
+
+Provider 模式只是后台 daemon 的可选 fallback，不是 Hermes 使用本 skill 的必要路径：
 
 1. `DecisionPipeline` 先完成本地筛选。
 2. `EventTriggeredDecisionProvider` 判断是否需要 Hermes。
@@ -258,7 +292,7 @@ python tests/smoke_phase7e.py
 7. 24h 后回看，失败样本交给 Hermes 复盘。
 8. 复盘结果写入经验库，下次类似场景自动注入。
 
-Provider 模式：
+daemon fallback 的 Provider 模式：
 
 ```text
 DECISION_PROVIDER=event   # 默认：事件触发路由，本地优先，必要时触发 Hermes 占位

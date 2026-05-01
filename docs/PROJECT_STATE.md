@@ -496,6 +496,30 @@ Verified:
 - `tests/smoke_phase4b.py`: `PHASE4B_SMOKE_OK`
 - `tests/smoke_phase7a.py`: `PHASE7A_SMOKE_OK`
 - `tests/smoke_phase7e.py`: `PHASE7E_SMOKE_OK`
+
+## 2026-05-01 Skill-First Agent Interface
+
+Clarified:
+- `trading-core` is primarily a trading skill/toolkit for external agents.
+- Hermes/MAKIMA should call `agent_tools.py` directly.
+- The provider architecture remains useful for daemon/fallback mode, but it is not the primary integration story.
+
+Implemented:
+- Added `agent_tools.get_skill_manifest()`.
+- Added `docs/HERMES_SKILL_GUIDE.md`.
+- Added `trading_core_skill.json`.
+- Updated README and handoff docs to describe the skill-first architecture.
+
+Primary external-agent workflow:
+```text
+get_skill_manifest
+-> get_market_analysis
+-> validate_trade_setup
+-> record_agent_decision
+-> review_due_decisions
+-> store_reflection
+-> get_daily_reflection_report
+```
 ## Current Next Step
 **Phase 9: Deployment & Tuning.**
 - The system is now structurally complete (Phases 1-8).
