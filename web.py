@@ -151,6 +151,97 @@ def api_dashboard():
         }
     return _cached("dashboard", 2.0, compute)
 
+@app.get("/api/decisions")
+def api_decisions():
+    """Returns recent decision memory summaries for UI."""
+    try:
+        from decision_memory import DecisionMemory
+        decisions = DecisionMemory.recent_decisions(12)
+        return {"decisions": decisions}
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.get("/api/memory")
+def api_memory():
+    """Returns recent experiences from memory."""
+    try:
+        from decision_memory import DecisionMemory
+        experiences = DecisionMemory.recent_experiences(8)
+        return {"experiences": experiences}
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.get("/api/settings")
+def api_settings():
+    """Returns current evolving settings / prepared params."""
+    try:
+        from config import (
+            MAX_DAILY_TRADES, MAX_DAILY_LOSS_PCT, COOLDOWN_AFTER_LOSS_MINUTES,
+            ATR_STOP_MULTIPLIER, RISK_PER_TRADE_PCT, TP1_R_MULTIPLE, TP2_R_MULTIPLE,
+            TP1_CLOSE_PCT, TP2_CLOSE_PCT, TRAILING_STOP_ATR_MULT, ATR_LOOKBACK,
+            MIN_NOTIONAL_USDT
+        )
+        state_path = Path.home() / ".hermes" / "trading_core" / "state.json"
+        evolved = {}
+        if state_path.exists():
+            try:
+                import json
+                with open(state_path, "r", encoding="utf-8") as f:
+                    s = json.load(f)
+                evolved = s.get("evolved_params", {})
+            except Exception:
+                evolved = {}
+        return {
+            "risk_limits": {
+                "MAX_DAILY_TRADES": MAX_DAILY_TRADES,
+                "MAX_DAILY_LOSS_PCT": MAX_DAILY_LOSS_PCT,
+                "COOLDOWN_AFTER_LOSS_MINUTES": COOLDOWN_AFTER_LOSS_MINUTES,
+            },
+            "sizing": {
+                "ATR_STOP_MULTIPLIER": ATR_STOP_MULTIPLIER,
+                "RISK_PER_TRADE_PCT": RISK_PER_TRADE_PCT,
+                "TP1_R_MULTIPLE": TP1_R_MULTIPLE,
+                "TP2_R_MULTIPLE": TP2_R_MULTIPLE,
+                "TP1_CLOSE_PCT": TP1_CLOSE_PCT,
+                "TP2_CLOSE_PCT": TP2_CLOSE_PCT,
+                "TRAILING_STOP_ATR_MULT": TRAILING_STOP_ATR_MULT,
+                "ATR_LOOKBACK": ATR_LOOKBACK,
+                "MIN_NOTIONAL_USDT": MIN_NOTIONAL_USDT,
+            },
+            "evolved_params": evolved,
+        }
+    except Exception as e:
+        return {"error": str(e)}
+
+@app.post("/api/backtest/run")
+def api_backtest_run(payload: dict):
+    """Trigger a backtest run via API (Phase 7E compatible)."""
+    try:
+        symbol = payload.get("symbol", "BTCUSDT")
+        start = payload.get("start", "2025-01-01")
+        end = payload.get("end", "2025-04-01")
+        interval = payload.get("interval", "15m")
+        from backtest import fetch_klines, BacktestEngine
+        klines_by_symbol = { }
+        klines = fetch_klines(symbol, interval, start, end)
+        if not klines:
+            return {"error": "No klines fetched"}
+        klines_by_symbol[symbol] = klines
+        engine = BacktestEngine(
+            symbols=[symbol],
+            klines_by_symbol=klines_by_symbol,
+            initial_balance=10000.0,
+            leverage=3,
+            sizing_mode="atr",
+            atr_multiplier=1.5,
+            risk_pct=2.0,
+            cooldown_candles=4,
+        )
+        result = engine.run()
+        return {"result": result}
+    except Exception as e:
+        return {"error": str(e)}
+
 
 @app.get("/api/decisions")
 def api_decisions():
