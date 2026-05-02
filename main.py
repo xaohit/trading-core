@@ -20,12 +20,16 @@ try:
     from trading_core.db.connection import init_db
     from trading_core.scanner import Scanner
     from trading_core.realtime_monitor import RealtimeMonitor
+    from trading_core.decision_memory import DecisionMemory
 except ModuleNotFoundError:
     from db.connection import init_db
     from scanner import Scanner
     from realtime_monitor import RealtimeMonitor
+    from decision_memory import DecisionMemory
 
-SCAN_INTERVAL = 300  # 5分钟全量扫描一次
+SCAN_INTERVAL = 60            # FIX #3: 5分钟对meme币太慢，改为1分钟
+OPTIMIZE_INTERVAL = 3600     # 1小时调参一次
+_last_optimize_ts = 0
 
 
 def run_once():
@@ -54,10 +58,33 @@ def daemon():
 
     run_once()  # 启动后立即扫一次
 
+    import time as _time
+    from self_optimizer import run as optimize_run
+
     try:
         while True:
-            time.sleep(SCAN_INTERVAL)
+            _time.sleep(SCAN_INTERVAL)
+
+            # 1. 扫描
             run_once()
+
+            # 2. 复盘到期决策
+            reviewed = DecisionMemory.review_due(limit=20)
+            if reviewed:
+                print(f"[review] 完成 {len(reviewed)} 条复盘")
+
+            # 3. 自动调参（每小时一次）
+            global _last_optimize_ts
+            if _time.time() - _last_optimize_ts >= OPTIMIZE_INTERVAL:
+                _last_optimize_ts = int(_time.time())
+                result = optimize_run(dry_run=True)
+                if result.get("ok") and result.get("suggestions"):
+                    print(f"[optimizer] 发现 {len(result['suggestions'])} 条调参建议（dry-run）")
+                elif result.get("ok"):
+                    print(f"[optimizer] 阈值正常，无需调整")
+                else:
+                    print(f"[optimizer] 数据不足，等待积累")
+
     except KeyboardInterrupt:
         print("\n[DAEMON] 停止...")
     finally:

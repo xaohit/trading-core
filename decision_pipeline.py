@@ -17,12 +17,14 @@ except ImportError:
 
 DEFAULT_VETO_THRESHOLDS = {
     "change_4h_pct": 25.0,
-    "change_24h_pct": 50.0,
+    # FIX #2: 50% → 70%，meme 币常见 50-200% 涨幅，50% 过严
+    "change_24h_pct": 70.0,
     "funding_pct": 0.05,
     "lsr_pct": 1.7,
     "taker_ratio": 1.8,
-    "long_taker_trend_pct": -5.0,
-    "short_taker_trend_pct": 5.0,
+    # FIX #1: 做多需要主动买入（正值），做空需要主动卖出（负值）
+    "long_taker_trend_pct": 5.0,
+    "short_taker_trend_pct": -5.0,
 }
 
 
@@ -144,27 +146,46 @@ class DecisionPipeline:
             return f"4h change={change_4h}% > {thresholds['change_4h_pct']}%"
 
         change_24h = snapshot.get("change_24h", 0) or 0
+        # FIX #2: 70% 放宽，meme 币常见大涨，50% 几乎过滤掉所有热门币
         if abs(change_24h) > thresholds["change_24h_pct"]:
             return f"24h change={change_24h}% > {thresholds['change_24h_pct']}%"
 
+        # FIX #6: funding 阈值区分策略方向，不再一刀切 abs(funding)
         funding = snapshot.get("funding_rate", 0) or 0
-        if abs(funding) >= thresholds["funding_pct"]:
-            return f"funding={funding}% >= {thresholds['funding_pct']}%"
+        verdict_lower = verdict.lower()
+        is_short_strategy = any(k in verdict_lower for k in ("做空", "空头", "short", "pump"))
+        if is_short_strategy:
+            # 做空策略：高正值费率是利好（多头给空头付钱），只拒绝极端情况
+            # (当前无条件通过；后续可加 funding > 0.2 的极端检查)
+            pass
+        else:
+            # 做多策略：负费率危险（空头给多头付钱，做多者反而要付钱）
+            # 但 neg_funding_long 策略本身就是吃负费率，阈值大幅放宽
+            is_neg_funding = any(k in verdict_lower for k in ("负费率", "neg_funding"))
+            if is_neg_funding:
+                if funding <= -0.1:  # 只拒绝极端负费率（≤ -10%）
+                    return f"funding={funding}% <= -0.1% (neg_funding_long: extreme neg funding risky)"
+            else:
+                if funding <= -thresholds["funding_pct"]:
+                    return f"funding={funding}% <= -{thresholds['funding_pct']}%"
 
         global_lsr = snapshot.get("global_lsr", 1.0) or 1.0
         if global_lsr >= thresholds["lsr_pct"]:
-            return f"retail LSR={global_lsr} >= {thresholds['lsr_pct']}"
+            return f"retail LSR={global_lsr} >= {thresholds['lsr_pct']}%"
 
         taker_ratio = snapshot.get("taker_ratio", 1.0) or 1.0
         if taker_ratio >= thresholds["taker_ratio"]:
             return f"taker ratio={taker_ratio} >= {thresholds['taker_ratio']}"
 
-        direction = signal.get("direction")
+        # FIX #1: taker_trend 区分方向
+        # - 做多（long）：需要主动买入，正值才有利，阈值 {long_taker_trend_pct}
+        # - 做空（short）：需要主动卖出，负值才有利，阈值 {short_taker_trend_pct}
+        direction = signal.get("direction", "")
         taker_trend = snapshot.get("taker_trend_pct", 0) or 0
-        if direction == "long" and taker_trend <= thresholds["long_taker_trend_pct"]:
-            return f"long taker trend={taker_trend}% <= {thresholds['long_taker_trend_pct']}%"
-        if direction == "short" and taker_trend >= thresholds["short_taker_trend_pct"]:
-            return f"short taker trend={taker_trend}% >= {thresholds['short_taker_trend_pct']}%"
+        if direction == "long" and taker_trend < thresholds["long_taker_trend_pct"]:
+            return f"long taker trend={taker_trend}% < {thresholds['long_taker_trend_pct']}% (need buying pressure)"
+        if direction == "short" and taker_trend > thresholds["short_taker_trend_pct"]:
+            return f"short taker trend={taker_trend}% > {thresholds['short_taker_trend_pct']}% (need selling pressure)"
 
         return None
 

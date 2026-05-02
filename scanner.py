@@ -343,6 +343,7 @@ class Scanner:
                 best_signal.get("snapshot", {}),
                 best_signal.get("analysis", {}),
                 agent_decision.get("reasoning"),
+                horizon_hours=1,
             )
             return {
                 "action": "agent_reject",
@@ -396,6 +397,8 @@ class Scanner:
             snapshot,
             analysis,
         )
+        # FIX #4: rejected signals use 1h horizon (not 24h) so Self-Optimizer
+        # can start learning immediately after first scan instead of waiting 24h
         self._remember_decision(
             symbol,
             decision.action,
@@ -403,6 +406,7 @@ class Scanner:
             snapshot,
             analysis,
             decision.reason,
+            horizon_hours=1,
         )
 
     def _agent_gate(self, signal: dict) -> dict:
@@ -563,21 +567,22 @@ class Scanner:
         signal_analysis: dict,
         result: str | None = None,
         trade: dict | None = None,
+        horizon_hours: int | None = None,
     ):
         try:
             # Phase 8A: Capture Market State and Macro Context
             market_state = classify_market_state(symbol)
-            
+
             # Macro Context
             btc_data = Market.ticker("BTCUSDT")
             btc_chg = float(btc_data.get("priceChangePercent", 0)) if isinstance(btc_data, dict) else 0
             fng = Market.fear_greed_index()
-            
+
             macro_context = {
                 "btc_24h_change": btc_chg,
                 "fear_greed_index": fng,
             }
-            
+
             DecisionMemory.record_decision(
                 symbol=symbol,
                 action=action,
@@ -590,6 +595,7 @@ class Scanner:
                 macro_context=macro_context,
                 market_state=market_state,
                 agent_reasoning=(signal.get("agent_decision") or {}).get("reasoning"),
+                horizon_hours=horizon_hours,
             )
         except Exception:
             pass
