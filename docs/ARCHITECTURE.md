@@ -102,8 +102,8 @@ Bad agent jobs:
 | `agent_tools.py` | External agent review/tool interface | Keep, reposition as learning interface |
 | `self_optimizer.py` | Threshold diagnostics | Keep, require enough samples |
 | `semantic_radar.py` | Manual semantic event inbox | Expand into real radar input layer |
-| `main_agent.py` | Legacy/manual demo | Move to examples or remove |
-| `agent_framework.py` | Experimental loop demo | Move to examples or remove |
+| `examples/main_agent.py` | Legacy/manual demo | ✅ Moved to examples |
+| `examples/agent_framework.py` | Experimental loop demo | ✅ Moved to examples |
 
 ## Target Architecture
 
