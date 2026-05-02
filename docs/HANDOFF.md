@@ -261,6 +261,13 @@ $env:PYTHONIOENCODING='utf-8'; $env:PYTHONPATH=(Get-Location).Path; .\.venv\Scri
 - Full pytest unit test suite
 - Multi-process architecture
 
+## Hermes Issue Status
+
+- `docs/issues/001-taker-trend-logic-reversed.md` has been resolved.
+- The production decision path now applies `taker_trend_pct` as a direction-aware veto:
+  long candidates reject strong active selling; short candidates reject strong active buying.
+- Regression coverage lives in `tests/smoke_decision_pipeline.py`.
+
 ## Mission Evolution
 
 **Original Goal:** Refactor a prototype into a paper-trading system.

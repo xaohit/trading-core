@@ -391,6 +391,22 @@ Backtest engine features:
 - Hermes should run `inject_historical_experience` to build the base memory.
 - Start the Agent in simulation mode (`agent_framework.py`) to accumulate data.
 
+## 2026-05-02 Hermes Issue Review
+
+Resolved:
+- Reviewed `docs/issues/001-taker-trend-logic-reversed.md`.
+- Fixed the direction-aware taker trend veto in `decision_pipeline.py`.
+- Long candidates are still vetoed when active selling pressure is strongly negative.
+- Short candidates are now vetoed only when active buying pressure is strongly positive.
+- Added smoke coverage in `tests/smoke_decision_pipeline.py`.
+
+Verified:
+- `py_compile`: `decision_pipeline.py`, `self_optimizer.py`, `scanner.py`, `agent_tools.py`
+- `tests/smoke_decision_pipeline.py`: `DECISION_PIPELINE_SMOKE_OK`
+- `tests/smoke_decision_provider.py`: `DECISION_PROVIDER_SMOKE_OK`
+- `tests/smoke_phase7a.py`: `PHASE7A_SMOKE_OK`
+- `self_optimizer.py` runs safely; it currently reports `no_reviewed_decisions` until enough reviewed decisions exist.
+
 ## 2026-05-01 Stabilization Pass
 
 Status:
