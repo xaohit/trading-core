@@ -1,5 +1,11 @@
 # Trading Core
 
+Architecture reference: `docs/ARCHITECTURE.md`.
+
+Primary rule: Hermes is the trader, `trading-core` is the trading skill. New
+agent integrations should import `agent_tools.py`; `main_agent.py` and
+`agent_framework.py` are legacy/experimental loop demos.
+
 一个面向 Hermes / MAKIMA / OpenClaw 等 Agent 的 **纸交易优先交易 skill**。它不是让系统内部控制 Agent，而是给 Agent 提供市场分析、风控校验、决策记忆、复盘和纸交易执行工具。
 
 > 当前状态：可以用于纸交易、模拟观察、回测、决策记录和经验库积累。  

@@ -100,9 +100,15 @@ The primary integration path is now explicit:
 **Core principle**: Keep live trading disabled. Make every decision auditable. Learn from outcomes.
 
 Primary skill docs:
+- `docs/ARCHITECTURE.md`
 - `docs/HERMES_SKILL_GUIDE.md`
 - `trading_core_skill.json`
 - `agent_tools.get_skill_manifest()`
+
+Entrypoint status:
+- Primary: `agent_tools.py`
+- Daemon/fallback: `scanner.py` with `decision_provider.py`
+- Legacy/experimental demos: `main_agent.py`, `agent_framework.py`
 
 ## System Architecture (Completed Pipeline)
 

@@ -407,6 +407,16 @@ Verified:
 - `tests/smoke_phase7a.py`: `PHASE7A_SMOKE_OK`
 - `self_optimizer.py` runs safely; it currently reports `no_reviewed_decisions` until enough reviewed decisions exist.
 
+## 2026-05-02 Architecture Cleanup
+
+Resolved:
+- Added `docs/ARCHITECTURE.md` as the single concise architecture reference.
+- Reconfirmed the primary integration path: Hermes calls `agent_tools.py`.
+- Marked `main_agent.py` and `agent_framework.py` as legacy/experimental loop demos.
+- Connected optimizer-managed `veto_thresholds` from `state.json` into `DecisionPipeline`.
+- Added `DecisionMemory.reviewed_decisions()` so `self_optimizer.py` can analyze historical reviewed samples instead of only newly due decisions.
+- Expanded `record_agent_decision()` to persist explicit stop loss, target, hypothesis, expected path, and invalidation fields.
+
 ## 2026-05-01 Stabilization Pass
 
 Status:

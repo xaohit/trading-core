@@ -6,12 +6,24 @@ orchestration: discover signals, rank candidates, execute approved trades.
 """
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass, field
 
 try:
-    from .config import ENTRY_QUALITY_MIN_PASSED, ENTRY_QUALITY_MIN_SCORE
+    from .config import ENTRY_QUALITY_MIN_PASSED, ENTRY_QUALITY_MIN_SCORE, STATE_PATH
 except ImportError:
-    from config import ENTRY_QUALITY_MIN_PASSED, ENTRY_QUALITY_MIN_SCORE
+    from config import ENTRY_QUALITY_MIN_PASSED, ENTRY_QUALITY_MIN_SCORE, STATE_PATH
+
+
+DEFAULT_VETO_THRESHOLDS = {
+    "change_4h_pct": 25.0,
+    "change_24h_pct": 50.0,
+    "funding_pct": 0.05,
+    "lsr_pct": 1.7,
+    "taker_ratio": 1.8,
+    "long_taker_trend_pct": -5.0,
+    "short_taker_trend_pct": 5.0,
+}
 
 
 @dataclass
@@ -125,31 +137,53 @@ class DecisionPipeline:
         if "过热" in verdict or "杩囩儹" in verdict:
             return f"verdict={verdict}"
 
+        thresholds = load_veto_thresholds()
+
         change_4h = snapshot.get("change_4h", 0) or 0
-        if abs(change_4h) > 25:
-            return f"4h change={change_4h}% > 25%"
+        if abs(change_4h) > thresholds["change_4h_pct"]:
+            return f"4h change={change_4h}% > {thresholds['change_4h_pct']}%"
 
         change_24h = snapshot.get("change_24h", 0) or 0
-        if abs(change_24h) > 50:
-            return f"24h change={change_24h}% > 50%"
+        if abs(change_24h) > thresholds["change_24h_pct"]:
+            return f"24h change={change_24h}% > {thresholds['change_24h_pct']}%"
 
         funding = snapshot.get("funding_rate", 0) or 0
-        if abs(funding) >= 0.05:
-            return f"funding={funding}% >= 0.05%"
+        if abs(funding) >= thresholds["funding_pct"]:
+            return f"funding={funding}% >= {thresholds['funding_pct']}%"
 
         global_lsr = snapshot.get("global_lsr", 1.0) or 1.0
-        if global_lsr >= 1.7:
-            return f"retail LSR={global_lsr} >= 1.7"
+        if global_lsr >= thresholds["lsr_pct"]:
+            return f"retail LSR={global_lsr} >= {thresholds['lsr_pct']}"
 
         taker_ratio = snapshot.get("taker_ratio", 1.0) or 1.0
-        if taker_ratio >= 1.8:
-            return f"taker ratio={taker_ratio} >= 1.8"
+        if taker_ratio >= thresholds["taker_ratio"]:
+            return f"taker ratio={taker_ratio} >= {thresholds['taker_ratio']}"
 
         direction = signal.get("direction")
         taker_trend = snapshot.get("taker_trend_pct", 0) or 0
-        if direction == "long" and taker_trend <= -5:
-            return f"long taker trend={taker_trend}% <= -5%"
-        if direction == "short" and taker_trend >= 5:
-            return f"short taker trend={taker_trend}% >= 5%"
+        if direction == "long" and taker_trend <= thresholds["long_taker_trend_pct"]:
+            return f"long taker trend={taker_trend}% <= {thresholds['long_taker_trend_pct']}%"
+        if direction == "short" and taker_trend >= thresholds["short_taker_trend_pct"]:
+            return f"short taker trend={taker_trend}% >= {thresholds['short_taker_trend_pct']}%"
 
         return None
+
+
+def load_veto_thresholds() -> dict:
+    """Load optimizer-managed pipeline thresholds from state.json."""
+    thresholds = dict(DEFAULT_VETO_THRESHOLDS)
+    if not STATE_PATH.exists():
+        return thresholds
+    try:
+        with open(STATE_PATH, "r", encoding="utf-8") as f:
+            state = json.load(f)
+        overrides = state.get("veto_thresholds") or {}
+    except Exception:
+        return thresholds
+    for key, value in overrides.items():
+        if key in thresholds:
+            try:
+                thresholds[key] = float(value)
+            except (TypeError, ValueError):
+                continue
+    return thresholds

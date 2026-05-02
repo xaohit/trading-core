@@ -136,10 +136,14 @@ def record_agent_decision(
     symbol: str, 
     action: str,  # "open_long", "open_short", "reject", "wait"
     direction: str | None = None,
+    stop_loss: float | None = None,
     target_price: float | None = None,
     conviction: float = 50.0,
     reasoning: str = "",
     reason: str | None = None,
+    hypothesis: str | None = None,
+    expected_path: str | None = None,
+    invalidation_condition: str | None = None,
     macro_context: dict | None = None,
     market_state: dict | None = None,
     agent_reasoning: str | None = None
@@ -148,17 +152,36 @@ def record_agent_decision(
     Tool: Record a decision made by the Agent.
     This creates a snapshot that will be reviewed in 24h.
     """
+    snapshot = get_market_snapshot(symbol)
+    price = snapshot.get("price")
+    if direction is None:
+        if action == "open_long":
+            direction = "long"
+        elif action == "open_short":
+            direction = "short"
+
+    sl_pct = _pct_distance(price, stop_loss, direction)
+    tp_pct = _pct_distance(price, target_price, direction)
     signal = {
         "type": "agent_manual",
         "direction": direction,
         "strength": "S" if conviction > 80 else "A",
-        "price": get_market_snapshot(symbol).get("price"),
-        "sl_pct": 0.05,
-        "tp_pct": 0.10,
+        "price": price,
+        "stop_loss": stop_loss,
+        "target_price": target_price,
+        "sl_pct": sl_pct if sl_pct is not None else 0.05,
+        "tp_pct": tp_pct if tp_pct is not None else 0.10,
+        "hypothesis": hypothesis,
+        "expected_path": expected_path,
+        "invalidation_condition": invalidation_condition,
     }
     
-    snapshot = get_market_snapshot(symbol)
-    analysis = {"score": conviction, "verdict": "agent_manual", "tags": ["agent_decision"]}
+    analysis = {
+        "score": conviction,
+        "verdict": "agent_manual",
+        "tags": ["agent_decision", f"action:{action}"],
+        "notes": [item for item in [hypothesis, expected_path, invalidation_condition] if item],
+    }
     final_reasoning = reasoning or reason or ""
     
     decision_id = DecisionMemory.record_decision(
@@ -175,6 +198,19 @@ def record_agent_decision(
     )
     
     return {"decision_id": decision_id, "status": "recorded"}
+
+
+def _pct_distance(entry_price, level_price, direction: str | None) -> float | None:
+    try:
+        entry = float(entry_price)
+        level = float(level_price)
+    except (TypeError, ValueError):
+        return None
+    if entry <= 0 or level <= 0 or direction not in {"long", "short"}:
+        return None
+    if direction == "long":
+        return abs(level - entry) / entry
+    return abs(entry - level) / entry
 
 
 def review_due_decisions() -> list[dict]:

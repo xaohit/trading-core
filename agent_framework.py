@@ -4,6 +4,8 @@ This is the "Brain Loop" for the Agent. It defines the lifecycle of the Agent:
 Scan → Decide → Execute → Review (Daily) → Evolve (Weekly).
 """
 
+# NOTE: Experimental loop. The primary Hermes integration path is agent_tools.py.
+
 import time
 import json
 import logging

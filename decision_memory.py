@@ -249,6 +249,28 @@ class DecisionMemory:
         return [DecisionMemory._format_decision(dict(row)) for row in c.fetchall()]
 
     @staticmethod
+    def reviewed_decisions(limit: int = 200) -> list[dict]:
+        """Return historical reviewed decisions with joined outcome fields."""
+        init_db()
+        conn = get_db()
+        c = conn.cursor()
+        c.execute(
+            """
+            SELECT d.*, o.review_price, o.return_pct, o.max_favorable_pct,
+                   o.max_adverse_pct, o.direction_correct, o.target_hit,
+                   o.invalidated, o.outcome_label, o.outcome_json,
+                   o.reviewed_at AS outcome_reviewed_at
+            FROM decision_snapshots d
+            JOIN decision_outcomes o ON o.snapshot_id=d.id
+            WHERE d.status='reviewed'
+            ORDER BY COALESCE(o.reviewed_at, d.reviewed_at, d.id) DESC
+            LIMIT ?
+            """,
+            (limit,),
+        )
+        return [dict(row) for row in c.fetchall()]
+
+    @staticmethod
     def recent_experiences(limit: int = 20) -> list[dict]:
         init_db()
         conn = get_db()

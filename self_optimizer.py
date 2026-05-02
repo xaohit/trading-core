@@ -57,15 +57,25 @@ VETO_REASONS = {
         "min": 0.03,
         "max": 0.15,
     },
-    "taker_trend": {
+    "long_taker_trend": {
         "type": "entry_veto",
-        "pattern": "taker trend=",
+        "pattern": "long taker trend=",
         "description": "Taker主动卖出趋势",
-        "threshold_key": "taker_trend_pct",
+        "threshold_key": "long_taker_trend_pct",
         "direction": "lt",
         "default": -5.0,
         "min": -20.0,
         "max": -2.0,
+    },
+    "short_taker_trend": {
+        "type": "entry_veto",
+        "pattern": "short taker trend=",
+        "description": "Taker active buying against shorts",
+        "threshold_key": "short_taker_trend_pct",
+        "direction": "gt",
+        "default": 5.0,
+        "min": 2.0,
+        "max": 20.0,
     },
     "change_4h": {
         "type": "entry_veto",
@@ -280,7 +290,8 @@ def suggest_adjustments(accuracy_report: dict) -> dict:
         if not meta:
             continue
 
-        current_val = current.get(key, meta["default"])
+        threshold_key = meta["threshold_key"]
+        current_val = current.get(threshold_key, meta["default"])
 
         if report["status"] == "需放宽":
             # 放宽：增大阈值允许更多交易
@@ -291,6 +302,7 @@ def suggest_adjustments(accuracy_report: dict) -> dict:
                 "reason": f"正确率仅{report['accuracy']}%，连续误判",
                 "old": round(current_val, 4),
                 "new": round(new_val, 4),
+                "threshold_key": threshold_key,
                 "meta": meta,
             }
         elif report["status"] == "可收紧":
@@ -302,6 +314,7 @@ def suggest_adjustments(accuracy_report: dict) -> dict:
                 "reason": f"正确率{report['accuracy']}%，判断精准",
                 "old": round(current_val, 4),
                 "new": round(new_val, 4),
+                "threshold_key": threshold_key,
                 "meta": meta,
             }
 
@@ -313,7 +326,7 @@ def suggest_adjustments(accuracy_report: dict) -> dict:
 # ============================================================
 def load_current_thresholds() -> dict:
     """从 state.json 加载当前阈值"""
-    state_path = Path.home() / ".hermes" / "trading_core" / "state.json"
+    state_path = STATE_PATH
     if state_path.exists():
         try:
             with open(state_path) as f:
@@ -326,7 +339,7 @@ def load_current_thresholds() -> dict:
 
 def save_thresholds(thresholds: dict):
     """保存阈值到 state.json"""
-    state_path = Path.home() / ".hermes" / "trading_core" / "state.json"
+    state_path = STATE_PATH
     state_path.parent.mkdir(parents=True, exist_ok=True)
 
     state = {}
@@ -366,7 +379,8 @@ def run(dry_run: bool = True) -> dict:
 
     # 1. 收集已复盘的决策
     print("\n[1] 收集已复盘的决策...")
-    decisions = DecisionMemory.review_due(limit=200)
+    DecisionMemory.review_due(limit=200)
+    decisions = DecisionMemory.reviewed_decisions(limit=ROLLING_WINDOW)
     if not decisions:
         print("  无已复盘决策，先跑一段时间积累数据")
         return {"ok": False, "reason": "no_reviewed_decisions"}
@@ -413,7 +427,7 @@ def run(dry_run: bool = True) -> dict:
     else:
         current = load_current_thresholds()
         for key, s in suggestions.items():
-            current[key] = s["new"]
+            current[s["threshold_key"]] = s["new"]
         save_thresholds(current)
 
     return {"ok": True, "accuracy": accuracy, "suggestions": suggestions}

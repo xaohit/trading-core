@@ -3,6 +3,9 @@ MAKIMA Agent Loop — The Bridge between Hermes (LLM) and Trading Core.
 This script orchestrates the: Data → LLM → Validation → Record cycle.
 """
 
+# NOTE: This is a legacy/manual demo entrypoint. The primary integration path
+# is skill-first: Hermes should import agent_tools.py directly.
+
 import json
 import logging
 import sys
@@ -142,8 +145,11 @@ def run_agent_cycle(symbols: list[str]):
                 symbol=symbol,
                 action=decision.get("action"),
                 direction="long" if "long" in decision.get("action", "") else ("short" if "short" in decision.get("action", "") else None),
+                stop_loss=float(decision.get("stop_loss", 0) or 0),
                 target_price=float(decision.get("target_price", 0)),
                 conviction=float(decision.get("conviction", 50)),
+                hypothesis=decision.get("hypothesis"),
+                invalidation_condition=decision.get("invalidation_condition"),
                 reasoning=f"🧠 AI Hypothesis: {decision.get('hypothesis')}\n💭 AI Reasoning: {decision.get('reasoning')}\n🚫 Invalid if: {decision.get('invalidation_condition')}",
                 macro_context=data.get("macro_context"),
                 market_state=data.get("market_state")

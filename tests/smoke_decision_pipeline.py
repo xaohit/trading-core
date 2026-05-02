@@ -6,7 +6,10 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from decision_pipeline import DecisionPipeline
+import decision_pipeline as pipeline_module
+from decision_pipeline import DEFAULT_VETO_THRESHOLDS, DecisionPipeline
+
+pipeline_module.load_veto_thresholds = lambda: dict(DEFAULT_VETO_THRESHOLDS)
 
 
 class FakeRisk:
