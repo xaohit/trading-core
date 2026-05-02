@@ -293,6 +293,95 @@ class BacktestEngine:
 
         return self._summary()
 
+def interval_to_minutes(interval: str) -> int:
+    """Convert kline interval to minutes.
+    Supported: 1m, 5m, 15m, 1h, 4h
+    """
+    if interval.endswith("m"):
+        return int(interval[:-1])
+    if interval.endswith("h"):
+        h = int(interval[:-1])
+        return h * 60
+    # default fallback
+    return 15
+
+
+def walk_forward_backtest(symbol: str,
+                          start: str,
+                          end: str,
+                          interval: str = "15m",
+                          window_days: int = 14,
+                          in_sample_ratio: float = 0.7,
+                          initial_balance: float = 10000.0,
+                          leverage: int = 3) -> dict:
+    """Very lightweight Walk-Forward backtest: single split into in-sample / out-of-sample.
+    Returns a compact summary for review.
+    """
+    klines_by_symbol = {}
+    klines = fetch_klines(symbol, interval, start, end)
+    if not klines:
+        return {"error": "No klines fetched"}
+    klines_by_symbol[symbol] = klines
+
+    mins = interval_to_minutes(interval)
+    if mins <= 0:
+        mins = 15
+    window_size = int((window_days * 24 * 60) / mins)
+    N = len(klines)
+    if N < window_size * 2:
+        # fallback to a single window backtest
+        eng = BacktestEngine(
+            symbols=[symbol],
+            klines_by_symbol=klines_by_symbol,
+            initial_balance=initial_balance,
+            leverage=leverage,
+            sizing_mode="atr",
+            atr_multiplier=1.5,
+            risk_pct=2.0,
+            cooldown_candles=4,
+        )
+        r = eng.run()
+        return {"phase": "single_window", "result": r}
+
+    in_start = 0
+    in_end = min(window_size, N)
+    out_start = window_size
+    out_end = min(2 * window_size, N)
+
+    eng_in = BacktestEngine(
+        symbols=[symbol],
+        klines_by_symbol={symbol: klines[in_start:in_end]},
+        initial_balance=initial_balance,
+        leverage=leverage,
+        sizing_mode="atr",
+        atr_multiplier=1.5,
+        risk_pct=2.0,
+        cooldown_candles=4,
+    )
+    res_in = eng_in.run()
+
+    eng_out = BacktestEngine(
+        symbols=[symbol],
+        klines_by_symbol={symbol: klines[out_start:out_end]},
+        initial_balance=initial_balance,
+        leverage=leverage,
+        sizing_mode="atr",
+        atr_multiplier=1.5,
+        risk_pct=2.0,
+        cooldown_candles=4,
+    )
+    res_out = eng_out.run()
+
+    return {
+        "phase": "walk_forward",
+        "in_sample": res_in,
+        "out_of_sample": res_out,
+        "summary": {
+            "in_sample_final": getattr(res_in, 'final_balance', None),
+            "out_of_sample_final": getattr(res_out, 'final_balance', None),
+        }
+    }
+
     def _try_open(self, symbol: str, idx: int):
         """Try to open a position for symbol at candle idx."""
         klines = self.klines_by_symbol[symbol]
