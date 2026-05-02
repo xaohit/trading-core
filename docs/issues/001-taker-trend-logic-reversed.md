@@ -1,27 +1,30 @@
-## Issue #1: taker_trend ≤ -5% 逻辑用反了
+## Issue #1: taker_trend <= -5% direction logic was reversed
 
-**Severity:** High  
-**File:** `decision_pipeline.py` L148-150
+**Severity:** High
+**File:** `decision_pipeline.py`
+**Status:** Fixed
 
-### 问题描述
+### Problem
 
-做空信号（`pos_funding_short`）被 `taker_trend=-39%` 拒绝，但 taker 主动卖出强（负值大）恰好是做空策略的**正面信号**，不是负面。
+Short candidates such as `pos_funding_short` could be rejected when `taker_trend_pct`
+was strongly negative. A negative taker trend means active selling pressure is rising,
+which is normally favorable for short strategies.
 
-代码：
+The old logic treated this as a universal veto:
+
 ```python
 taker_trend = snapshot.get("taker_trend_pct", 0) or 0
 if taker_trend <= -5:
     return f"taker trend={taker_trend}% <= -5%"
 ```
 
-### 根因
+### Fix
 
-`taker_trend_pct` 负值代表主动卖出，正值代表主动买入。做空策略（short）希望看到强主动卖出，`taker_trend <= -5%` 恰好是做空的有利条件，却被当作否决条件。
+The entry veto now reads the signal direction:
 
-### 修复方向
+- Long signals are rejected when taker trend is strongly negative.
+- Short signals are rejected when taker trend is strongly positive.
+- Strong negative taker trend is allowed for short candidates.
 
-`taker_trend` 的判断应该**区分方向**：
-- 做多信号（`neg_funding_long`/`crash_bounce_long`）：需要 taker_trend ≥ +5%（主动买入强）
-- 做空信号（`pos_funding_short`/`pump_short`）：需要 taker_trend ≤ -5%（主动卖出强）
-
-或者改为只对做多信号检查这个条件，做空信号不检查。
+Smoke coverage was added in `tests/smoke_decision_pipeline.py` to protect all three
+cases.

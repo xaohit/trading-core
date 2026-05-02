@@ -22,8 +22,9 @@ class FakeRisk:
         return self.allowed, "fake_risk_reject"
 
 
-def _signal():
-    return {"type": "neg_funding_long", "direction": "long", "strength": "A"}
+def _signal(direction="long"):
+    signal_type = "neg_funding_long" if direction == "long" else "pos_funding_short"
+    return {"type": signal_type, "direction": direction, "strength": "A"}
 
 
 def _analysis(score=70, tags=None, verdict="healthy"):
@@ -39,6 +40,12 @@ def _snapshot():
         "taker_ratio": 1.1,
         "taker_trend_pct": 1,
     }
+
+
+def _snapshot_with_taker_trend(taker_trend_pct):
+    snapshot = _snapshot()
+    snapshot["taker_trend_pct"] = taker_trend_pct
+    return snapshot
 
 
 def test_pipeline_accepts_clean_candidate():
@@ -79,6 +86,28 @@ def test_pipeline_rejects_quality_and_risk():
     print("  [OK] Pipeline rejects quality and risk")
 
 
+def test_pipeline_applies_directional_taker_trend_veto():
+    long_decision = DecisionPipeline(FakeRisk()).evaluate(
+        "SOLUSDT", _signal("long"), _snapshot_with_taker_trend(-10), _analysis(), True, {}, 4
+    )
+    assert long_decision.ok is False
+    assert long_decision.action == "entry_veto"
+
+    short_decision = DecisionPipeline(FakeRisk()).evaluate(
+        "SOLUSDT", _signal("short"), _snapshot_with_taker_trend(-10), _analysis(), True, {}, 4
+    )
+    assert short_decision.ok is True
+    assert short_decision.action == "candidate_ok"
+
+    short_buying_decision = DecisionPipeline(FakeRisk()).evaluate(
+        "SOLUSDT", _signal("short"), _snapshot_with_taker_trend(10), _analysis(), True, {}, 4
+    )
+    assert short_buying_decision.ok is False
+    assert short_buying_decision.action == "entry_veto"
+
+    print("  [OK] Pipeline applies directional taker trend veto")
+
+
 if __name__ == "__main__":
     print("Decision Pipeline Smoke Tests")
     print("=" * 40)
@@ -86,6 +115,7 @@ if __name__ == "__main__":
     test_pipeline_accepts_clean_candidate()
     test_pipeline_rejects_score_tags()
     test_pipeline_rejects_quality_and_risk()
+    test_pipeline_applies_directional_taker_trend_veto()
 
     print("=" * 40)
     print("DECISION_PIPELINE_SMOKE_OK")

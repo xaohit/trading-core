@@ -59,7 +59,7 @@ class DecisionPipeline:
                 score=composite_score,
             )
 
-        veto_reason = self._entry_veto_reason(analysis, snapshot)
+        veto_reason = self._entry_veto_reason(signal, analysis, snapshot)
         if veto_reason:
             return PipelineDecision(
                 ok=False,
@@ -120,7 +120,7 @@ class DecisionPipeline:
         return None
 
     @staticmethod
-    def _entry_veto_reason(analysis: dict, snapshot: dict) -> str | None:
+    def _entry_veto_reason(signal: dict, analysis: dict, snapshot: dict) -> str | None:
         verdict = analysis.get("verdict", "")
         if "过热" in verdict or "杩囩儹" in verdict:
             return f"verdict={verdict}"
@@ -145,8 +145,11 @@ class DecisionPipeline:
         if taker_ratio >= 1.8:
             return f"taker ratio={taker_ratio} >= 1.8"
 
+        direction = signal.get("direction")
         taker_trend = snapshot.get("taker_trend_pct", 0) or 0
-        if taker_trend <= -5:
-            return f"taker trend={taker_trend}% <= -5%"
+        if direction == "long" and taker_trend <= -5:
+            return f"long taker trend={taker_trend}% <= -5%"
+        if direction == "short" and taker_trend >= 5:
+            return f"short taker trend={taker_trend}% >= 5%"
 
         return None
