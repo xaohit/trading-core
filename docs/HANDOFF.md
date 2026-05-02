@@ -101,14 +101,22 @@ The primary integration path is now explicit:
 
 Primary skill docs:
 - `docs/ARCHITECTURE.md`
+- `docs/RESTRUCTURE_PLAN.md`
 - `docs/HERMES_SKILL_GUIDE.md`
 - `trading_core_skill.json`
 - `agent_tools.get_skill_manifest()`
 
 Entrypoint status:
-- Primary: `agent_tools.py`
-- Daemon/fallback: `scanner.py` with `decision_provider.py`
+- Product surface: `web.py`
+- Trading engine: `scanner.py`
+- Agent learning/review interface: `agent_tools.py`
 - Legacy/experimental demos: `main_agent.py`, `agent_framework.py`
+
+Current product direction:
+- Trading Core is an autonomous trading system.
+- The local engine owns the fast trading loop.
+- Agents own the slow learning loop: review, reflection, tuning suggestions.
+- The final operating surface is the Web UI; all normal actions should be possible from the browser.
 
 ## System Architecture (Completed Pipeline)
 

@@ -417,6 +417,19 @@ Resolved:
 - Added `DecisionMemory.reviewed_decisions()` so `self_optimizer.py` can analyze historical reviewed samples instead of only newly due decisions.
 - Expanded `record_agent_decision()` to persist explicit stop loss, target, hypothesis, expected path, and invalidation fields.
 
+## 2026-05-02 Product Repositioning
+
+Current direction:
+- Trading Core is an autonomous trading system, not just a skill wrapper.
+- The local engine owns the fast loop: radar, strategy, risk, execution, monitoring, memory.
+- Agents own the slow loop: review, reflection, tuning suggestions, learning.
+- The final product surface is Web-first: all normal operations should be available from the browser.
+
+Docs updated:
+- Rewrote `README.md`.
+- Rewrote `docs/ARCHITECTURE.md`.
+- Added `docs/RESTRUCTURE_PLAN.md`.
+
 ## 2026-05-01 Stabilization Pass
 
 Status:

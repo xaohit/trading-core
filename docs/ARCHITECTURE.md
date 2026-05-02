@@ -1,82 +1,168 @@
-# Trading Core Architecture
+# Architecture
 
-This project is a paper-first trading skill for Hermes, MAKIMA, OpenClaw, or
-another external agent. The agent is the trader. `trading-core` is the toolkit:
-market radar, deterministic guards, decision memory, reflection storage,
-backtesting, and paper execution.
+Trading Core is an autonomous trading engine with an agent-assisted learning
+layer.
 
-## Primary Path: Skill-First
+The trading engine runs locally. It scans, filters, validates, executes paper
+trades, monitors positions, records outcomes, and reviews decisions. Agents are
+not required in the fast trading loop. They are used in the slow learning loop:
+reflection, diagnosis, tuning suggestions, and strategy review.
 
-Hermes should use this repository by importing `agent_tools.py`.
+The final product surface is the Web console. Scripts and tools can remain for
+development, but normal operation should happen in the browser: engine control,
+radar review, positions, decisions, memory, agent reflections, optimizer
+suggestions, backtests, settings, and safety controls.
+
+## First Principle
+
+The project exists to test whether a repeatable, risk-controlled trading edge can
+be found and improved over time.
 
 ```text
-Hermes / MAKIMA
--> agent_tools.get_skill_manifest()
--> agent_tools.get_market_analysis(symbol)
--> Hermes produces a structured trade/wait hypothesis
--> agent_tools.validate_trade_setup(...)
--> agent_tools.record_agent_decision(...)
--> agent_tools.review_due_decisions()
--> agent_tools.store_reflection(...)
+Profit system = market edge + risk discipline + reliable execution + learning loop
 ```
 
-This is the main architecture. It keeps the model in the role of a human trader:
-reading context, forming hypotheses, accepting/rejecting trades, and writing
-lessons after review.
+The architecture should stay simple:
 
-## Local Daemon Path: Fallback
+```text
+Radar -> Strategy -> Risk -> Execution -> Memory -> Learning -> Radar
+```
 
-The daemon is useful for paper-trading observation and low-token operation.
+## Fast Loop: Local Autonomous Trading
+
+This loop should be cheap, deterministic, and always available.
 
 ```text
 scanner.py
--> strategy candidate discovery
--> DecisionPipeline
--> ranking
--> DecisionProvider
--> TA/RR guard
--> paper execution
--> DecisionMemory
+-> candidate discovery
+-> market_snapshot.py
+-> signals.py
+-> decision_pipeline.py
+-> agent_decision.py
+-> ta_checker.py / risk.py
+-> executor.py
+-> decision_memory.py
 ```
 
-`DecisionProvider` routes ordinary cases to the deterministic local
-`AgentDecisionGate`. The Hermes provider is intentionally safe until a real
-client is wired: it returns `wait`.
+Responsibilities:
 
-## Legacy / Experimental Path
+| Layer | Responsibility |
+|---|---|
+| Radar | Find market candidates and abnormal conditions |
+| Strategy | Turn candidates into long/short hypotheses |
+| Risk | Reject bad environments, crowded setups, invalid R/R, and unsafe account states |
+| Execution | Open/manage paper trades with deterministic TP/SL/trailing logic |
+| Monitoring | Track open positions and close by rules |
+| Memory | Record every material open/reject/wait/close decision |
 
-`main_agent.py` and `agent_framework.py` are not the primary integration path.
-They remain as experimental/manual demos for agent loops and reflection routines.
-New agent integrations should prefer `agent_tools.py`.
+## Slow Loop: Agent Learning
 
-## Core Boundaries
+This loop can use Hermes, MAKIMA, OpenClaw, or a future custom agent. It does not
+need to run on every market tick.
 
-| Layer | File | Responsibility |
+```text
+review_due_decisions()
+-> daily reflection report
+-> agent reviews failures and missed opportunities
+-> store_reflection()
+-> self_optimizer.py suggests threshold changes
+-> state.json updates
+-> next trading cycle uses new lessons / thresholds
+```
+
+Good agent jobs:
+
+- Explain why a decision failed
+- Identify ignored signals or conflicting context
+- Summarize what should change next time
+- Suggest conservative parameter changes from reviewed samples
+- Review whether a strategy family still has positive expectancy
+
+Bad agent jobs:
+
+- Bypass risk checks
+- Trade live without a safety gate
+- Rewrite parameters without enough reviewed data
+- Run full LLM reasoning for every weak signal
+
+## Current Code Map
+
+| File | Current Role | Future Direction |
 |---|---|---|
-| Skill interface | `agent_tools.py` | Stable external-agent API |
-| Candidate discovery | `strategies/detectors.py` | Seed strategy signals only |
-| Market context | `market_snapshot.py`, `signals.py` | Snapshot, scoring, tags |
-| Pre-agent guard | `decision_pipeline.py` | Deterministic vetoes and risk quality |
-| Fallback decision | `agent_decision.py` | Local trade/wait judgment |
-| Provider router | `decision_provider.py` | Local vs Hermes routing for daemon mode |
-| Trade validation | `ta_checker.py`, `risk.py` | Hard R/R and account guards |
-| Execution | `executor.py` | Paper execution and position management |
-| Memory loop | `decision_memory.py` | Snapshots, 24h review, experience cases |
-| Optimizer | `self_optimizer.py` | Threshold diagnostics and state updates |
+| `scanner.py` | Main autonomous paper-trading orchestrator | Keep as engine entry |
+| `market_snapshot.py` | Futures market context | Keep |
+| `signals.py` | Context scoring and tags | Keep |
+| `strategies/detectors.py` | Seed strategy signals | Expand carefully |
+| `decision_pipeline.py` | Deterministic pre-trade filters | Keep and make thresholds explicit |
+| `agent_decision.py` | Local paper-trading decision gate | Rename later to `trade_gate.py` |
+| `decision_provider.py` | Old provider/router abstraction | Simplify or remove |
+| `executor.py` | Paper execution and position management | Keep, later split paper/live adapters |
+| `risk.py` | Account and entry risk checks | Keep |
+| `decision_memory.py` | Snapshots, review, experience cases | Keep |
+| `agent_tools.py` | External agent review/tool interface | Keep, reposition as learning interface |
+| `self_optimizer.py` | Threshold diagnostics | Keep, require enough samples |
+| `semantic_radar.py` | Manual semantic event inbox | Expand into real radar input layer |
+| `main_agent.py` | Legacy/manual demo | Move to examples or remove |
+| `agent_framework.py` | Experimental loop demo | Move to examples or remove |
 
-## Safety Rules
+## Target Architecture
 
-- Live trading is out of scope until a separate safety review is done.
-- Every material trade or wait decision should be recorded.
-- Hermes can reason, but local hard guards must remain deterministic.
-- Optimizer changes must go through `state.json`; code defaults stay conservative.
-- Failed reviewed decisions should produce lessons through `store_reflection()`.
+```text
+trading-core/
+  radar/
+    funding_oi.py
+    social_heat.py
+    semantic_events.py
+    onchain_events.py
+  strategies/
+    detectors.py
+  risk/
+    account.py
+    entry_quality.py
+    trade_setup.py
+  execution/
+    paper.py
+    live_adapter.py      # future, disabled by default
+  memory/
+    decisions.py
+    experiences.py
+    reports.py
+  learning/
+    self_optimizer.py
+    agent_review_tools.py
+  web/
+    app.py
+```
 
-## Current High-Value Next Work
+This target does not need to be reached in one big move. The first priority is
+to simplify the concept and prove profitability in paper trading.
 
-1. Keep enriching decision snapshots with macro, order book, Polymarket, and
-   explicit hypothesis fields.
-2. Accumulate reviewed paper decisions before trusting optimizer suggestions.
-3. Wire a real Hermes client only if the project intentionally moves beyond
-   skill-first usage.
-4. Add a full pytest suite once the smoke-test surface stabilizes.
+## Web Console
+
+The Web UI should become the main operating console.
+
+Required views:
+
+- Dashboard: equity, open positions, PnL, drawdown, engine status
+- Radar: market candidates, signals, snapshots, semantic events
+- Decisions: opened/rejected/wait records with reasons and context
+- Positions: TP/SL/trailing state and manual controls
+- Memory: reviewed decisions, lessons, and similar experiences
+- Agent Review: reflection prompts and stored lessons
+- Optimizer: threshold diagnostics, apply/rollback controls
+- Backtest: run tests, view attribution, inject historical experience
+- Settings: risk limits, strategy params, paper/live mode, kill switch
+
+## Safety Boundary
+
+Live trading requires a separate readiness gate:
+
+- Paper sample size target reached
+- Positive expectancy after fees and estimated slippage
+- Maximum drawdown within limit
+- Daily loss limit implemented
+- Kill switch implemented
+- Order idempotency implemented
+- Exchange error handling implemented
+- Dry-run reconciliation completed
+- Small-capital rollout plan approved
