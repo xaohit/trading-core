@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""
-entry_decision.py — 15min 决策报告 & 8h 复盘
-用法:
-  python3 entry_decision.py decision  — 扫描 + 决策报告
-  python3 entry_decision.py reflection — 8h 复盘报告
-"""
+"""entry_decision.py — 决策报告 & 8h 复盘，不打扰"""
 import sys, os, asyncio, json, subprocess
 from datetime import datetime
 
@@ -14,6 +9,8 @@ os.environ["https_proxy"] = "http://localhost:7897"
 sys.path.insert(0, "/tmp/trading_core")
 from monitor.market_monitor import MarketMonitor
 
+WECHAT_ID = "o9cq80y1kkdQ-Z6SR6DqAZuCi370@im.wechat"
+
 
 def _nanobot_push(content: str) -> bool:
     PY = "/usr/local/bin/python3"
@@ -21,8 +18,7 @@ def _nanobot_push(content: str) -> bool:
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=60, cwd="/Users/xaohit")
         return r.returncode == 0
-    except Exception as e:
-        print(f"[push] failed: {e}", file=sys.stderr)
+    except Exception:
         return False
 
 
@@ -106,14 +102,11 @@ async def main():
 
     if mode == "reflection":
         report = build_reflection_report()
-        print(report, file=sys.stderr)
         _nanobot_push(report)
         return
 
-    # Decision mode
     result = await run_scan()
     report = build_decision_report(result)
-    print(report, file=sys.stderr)
     _nanobot_push(report)
 
 
