@@ -2,13 +2,13 @@
 Risk Manager — 风控中枢
 """
 try:
-    from config import (
+    from trading_core.config import (
         MAX_DAILY_LOSS_PCT, MAX_DRAWDOWN_PCT, MAX_OPEN_POSITIONS,
         POSITION_PCT, LEVERAGE, MIN_VOLUME_M, EXCLUDE_SYMBOLS,
         MAX_DAILY_TRADES, COOLDOWN_AFTER_LOSS_MINUTES, SECTOR_MAX_CONCENTRATION,
     )
-    from .market import Market
-    from .state import State
+    from trading_core.market import Market
+    from trading_core.state import State
 except ImportError:
     from config import (
         MAX_DAILY_LOSS_PCT, MAX_DRAWDOWN_PCT, MAX_OPEN_POSITIONS,
@@ -60,7 +60,7 @@ class RiskManager:
 
         # 3. 最大持仓数
         try:
-            from .db.trades import TradeDB
+            from trading_core.db.trades import TradeDB
         except ImportError:
             from db.trades import TradeDB
         open_positions = TradeDB.get_open()

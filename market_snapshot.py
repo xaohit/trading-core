@@ -12,7 +12,7 @@ import math
 from typing import Any, Optional
 
 try:
-    from .market import _curl_get, Market
+    from market import _curl_get, Market
 except ImportError:
     from market import _curl_get, Market
 

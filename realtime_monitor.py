@@ -10,17 +10,17 @@ import time
 from datetime import datetime, timezone, timedelta
 
 try:
-    from .config import MIN_VOLUME_M, TP1_CLOSE_PCT, TP2_CLOSE_PCT
-    from .market import Market
-    from .db.trades import TradeDB
-    from .executor import Executor
-    from .memory import Memory
+    from config import MIN_VOLUME_M, TP1_CLOSE_PCT, TP2_CLOSE_PCT
+    from market import Market
+    from db.trades import TradeDB
+    from execution.executor import Executor
+    from core_memory import Memory
 except ImportError:
     from config import MIN_VOLUME_M, TP1_CLOSE_PCT, TP2_CLOSE_PCT
     from market import Market
     from db.trades import TradeDB
-    from executor import Executor
-    from memory import Memory
+    from execution.executor import Executor
+    from core_memory import Memory
 
 
 TZ_UTC8 = timezone(timedelta(hours=8))

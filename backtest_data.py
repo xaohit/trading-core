@@ -8,8 +8,8 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 try:
-    from .config import PROXY
-    from .market import Market
+    from config import PROXY
+    from market import Market
 except ImportError:
     from config import PROXY
     from market import Market

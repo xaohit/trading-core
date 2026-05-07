@@ -17,9 +17,9 @@ try:
     from decision_memory import DecisionMemory
     from backtest import BacktestEngine, fetch_klines
 except ImportError:
-    from .db.connection import get_db, init_db
-    from .decision_memory import DecisionMemory
-    from .backtest import BacktestEngine, fetch_klines
+    from db.connection import get_db, init_db
+    from memory.decision_memory import DecisionMemory
+    from backtest import BacktestEngine, fetch_klines
 
 def inject_backtest_results(symbol: str, start: str, end: str, interval: str = "15m"):
     """

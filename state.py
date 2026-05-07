@@ -8,7 +8,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional
 
 try:
-    from .config import STATE_PATH
+    from config import STATE_PATH
 except ImportError:
     from config import STATE_PATH
 

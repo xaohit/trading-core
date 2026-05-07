@@ -24,9 +24,9 @@ import time
 from typing import Any
 
 try:
-    from .config import STRATEGY_CONFIGS
-    from .db.connection import get_db, init_db
-    from .market import Market
+    from config import STRATEGY_CONFIGS
+    from db.connection import get_db, init_db
+    from market import Market
 except ImportError:
     from config import STRATEGY_CONFIGS
     from db.connection import get_db, init_db
@@ -234,7 +234,7 @@ class FailureArchive:
         # Get current snapshot for exit analysis
         exit_snapshot = {}
         try:
-            from .market_snapshot import get_market_snapshot
+            from market_snapshot import get_market_snapshot
             exit_snapshot = get_market_snapshot(trade_dict["symbol"])
         except Exception:
             pass

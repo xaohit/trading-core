@@ -8,12 +8,12 @@ from pathlib import Path
 # 确保可以 import
 sys.path.insert(0, str(Path(__file__).parent))
 
-from .db.connection import init_db
-from .scanner import Scanner
-from .db.trades import TradeDB
-from .memory import Memory
-from .market import Market
-from .state import State
+from db.connection import init_db
+from scanner import Scanner
+from db.trades import TradeDB
+from core_memory import Memory
+from market import Market
+from state import State
 
 
 def scan_and_trade() -> dict:
@@ -143,7 +143,7 @@ def force_close(symbol: str = None) -> dict:
 
     closed = []
     for pos in targets:
-        from .executor import Executor
+        from execution.executor import Executor
         Executor._close_by_market(pos)
         closed.append(pos["symbol"])
 

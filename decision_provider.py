@@ -13,8 +13,8 @@ from abc import ABC, abstractmethod
 from typing import Any
 
 try:
-    from .agent_decision import AgentDecisionGate
-    from .trade_hypothesis import build_hypothesis
+    from agent_decision import AgentDecisionGate
+    from trade_hypothesis import build_hypothesis
 except ImportError:
     from agent_decision import AgentDecisionGate
     from trade_hypothesis import build_hypothesis

@@ -10,7 +10,7 @@ import json
 from dataclasses import dataclass, field
 
 try:
-    from .config import ENTRY_QUALITY_MIN_PASSED, ENTRY_QUALITY_MIN_SCORE, STATE_PATH
+    from config import ENTRY_QUALITY_MIN_PASSED, ENTRY_QUALITY_MIN_SCORE, STATE_PATH
 except ImportError:
     from config import ENTRY_QUALITY_MIN_PASSED, ENTRY_QUALITY_MIN_SCORE, STATE_PATH
 

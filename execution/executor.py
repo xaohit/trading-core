@@ -7,7 +7,7 @@ import time
 from datetime import datetime, timezone, timedelta
 
 try:
-    from .config import (
+    from config import (
         BINANCE_API_KEY, BINANCE_API_SECRET, PROXY, PROXIES,
         TG_TOKEN, TG_CHAT_ID, LEVERAGE, POSITION_PCT,
         ATR_STOP_MULTIPLIER, RISK_PER_TRADE_PCT,

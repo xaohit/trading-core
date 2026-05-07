@@ -63,7 +63,7 @@ def test_entry_quality_veto():
     """Test hard veto conditions from scanner."""
     # Import Scanner for the static method
     try:
-        from .scanner import Scanner
+        from trading_core.scanner import Scanner
     except ImportError:
         from scanner import Scanner
 

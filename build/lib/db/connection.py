@@ -5,7 +5,7 @@ import sqlite3
 from pathlib import Path
 
 try:
-    from config import BASE_DIR, DB_PATH, HISTORY_DIR
+    from trading_core.config import BASE_DIR, DB_PATH, HISTORY_DIR
 except ImportError:
     from config import BASE_DIR, DB_PATH, HISTORY_DIR
 

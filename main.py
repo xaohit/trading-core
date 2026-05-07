@@ -17,10 +17,10 @@ sys.path.insert(0, str(BASE_DIR.parent))
 sys.path.insert(0, str(BASE_DIR))
 
 try:
-    from trading_core.db.connection import init_db
-    from trading_core.scanner import Scanner
-    from trading_core.realtime_monitor import RealtimeMonitor
-    from trading_core.decision_memory import DecisionMemory
+    from db.connection import init_db
+    from scanner import Scanner
+    from realtime_monitor import RealtimeMonitor
+    from memory.decision_memory import DecisionMemory
 except ModuleNotFoundError:
     from db.connection import init_db
     from scanner import Scanner
@@ -59,7 +59,7 @@ def daemon():
     run_once()  # 启动后立即扫一次
 
     import time as _time
-    from self_optimizer import run as optimize_run
+    from learning.self_optimizer import run as optimize_run
 
     try:
         while True:

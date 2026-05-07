@@ -411,7 +411,7 @@ def _format_h(h):
 @app.get("/api/signals")
 def api_signals():
     """各策略历史统计"""
-    from memory import Memory
+    from core_memory import Memory
     stats = Memory.get_strategy_stats()
     recent = _format_signals(Memory.get_recent_signals(limit=20))
     return {"stats": stats, "recent": recent}
@@ -531,7 +531,7 @@ def _format_signals(rows: list[dict]) -> list[dict]:
 
 @app.get("/api/close/{trade_id}")
 def api_close(trade_id: int):
-    from executor import Executor
+    from execution.executor import Executor
     positions = TradeDB.get_open()
     pos = next((p for p in positions if p["id"] == trade_id), None)
     if not pos:
@@ -543,7 +543,7 @@ def api_close(trade_id: int):
 
 @app.get("/api/close-all")
 def api_close_all():
-    from executor import Executor
+    from execution.executor import Executor
     count = Executor.close_all()
     _invalidate("dashboard")
     return {"ok": True, "count": count}

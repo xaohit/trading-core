@@ -11,16 +11,16 @@ SKILL_NAME = "trading-core"
 SKILL_VERSION = "0.2.0"
 
 try:
-    from .market_snapshot import get_market_snapshot
-    from .signals import analyze
-    from .decision_memory import DecisionMemory
-    from .market_state import classify_market_state
-    from .market import Market
-    from .strategies.detectors import detect_all
-    from .config import DECISION_REVIEW_HORIZON_HOURS, STATE_PATH
-    from .ta_checker import assess_trade_setup
-    from .semantic_radar import SemanticRadar
-    from .daily_reflection import build_daily_reflection_report
+    from market_snapshot import get_market_snapshot
+    from signals import analyze
+    from memory.decision_memory import DecisionMemory
+    from market_state import classify_market_state
+    from market import Market
+    from strategies.detectors import detect_all
+    from config import DECISION_REVIEW_HORIZON_HOURS, STATE_PATH
+    from ta_checker import assess_trade_setup
+    from semantic_radar import SemanticRadar
+    from daily_reflection import build_daily_reflection_report
 except ImportError:
     from market_snapshot import get_market_snapshot
     from signals import analyze
@@ -273,7 +273,7 @@ def run_backtest(symbol: str, start: str, end: str, sizing: str = "atr") -> dict
     Tool: Run a backtest and (future) inject results into experience library.
     """
     try:
-        from .backtest import fetch_klines, BacktestEngine
+        from backtest import fetch_klines, BacktestEngine
     except ImportError:
         from backtest import fetch_klines, BacktestEngine
 
@@ -350,7 +350,7 @@ def run_monte_carlo_analysis(
     # 2. Run Monte Carlo
     try:
         try:
-            from .monte_carlo import run_monte_carlo
+            from monte_carlo import run_monte_carlo
         except ImportError:
             from monte_carlo import run_monte_carlo
 
@@ -397,7 +397,7 @@ def inject_historical_experience(symbol: str, start: str, end: str) -> dict:
     """
     try:
         try:
-            from .experience_injector import inject_backtest_results
+            from experience_injector import inject_backtest_results
         except ImportError:
             from experience_injector import inject_backtest_results
 
@@ -421,7 +421,7 @@ def store_reflection(
     """
     try:
         try:
-            from .db.connection import get_db, init_db
+            from db.connection import get_db, init_db
         except ImportError:
             from db.connection import get_db, init_db
 

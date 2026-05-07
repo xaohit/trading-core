@@ -9,7 +9,7 @@ import threading
 from typing import Optional
 
 try:
-    from .config import PROXY, PROXIES, BINANCE_API_KEY, BINANCE_API_SECRET
+    from config import PROXY, PROXIES, BINANCE_API_KEY, BINANCE_API_SECRET
 except ImportError:
     from config import PROXY, PROXIES, BINANCE_API_KEY, BINANCE_API_SECRET
 

@@ -20,7 +20,7 @@ import json
 from datetime import datetime, timezone, timedelta
 
 try:
-    from .config import PROXY, PROXIES, EXCLUDE_SYMBOLS
+    from config import PROXY, PROXIES, EXCLUDE_SYMBOLS
 except ImportError:
     from config import PROXY, PROXIES, EXCLUDE_SYMBOLS
 

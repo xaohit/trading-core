@@ -11,7 +11,7 @@ from . import state
 from . import scanner
 from . import executor
 from . import risk
-from . import memory
+from . import core_memory
 from . import db
 from . import strategies
 from .tools import TOOLS, TOOL_DEFINITIONS
@@ -25,7 +25,7 @@ __all__ = [
     "scanner",
     "executor",
     "risk",
-    "memory",
+    "core_memory",
     "db",
     "strategies",
     "TOOLS",

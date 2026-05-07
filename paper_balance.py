@@ -7,8 +7,8 @@ import threading
 from pathlib import Path
 
 try:
-    from .db.trades import TradeDB
-    from .market import Market
+    from db.trades import TradeDB
+    from market import Market
 except ImportError:
     from db.trades import TradeDB
     from market import Market

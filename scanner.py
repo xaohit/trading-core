@@ -2,6 +2,11 @@
 Scanner — 币种扫描 + 信号检测 + 开仓决策
 """
 from datetime import datetime, timezone, timedelta
+import sys, os
+_PKG_DIR = os.path.dirname(os.path.abspath(__file__))
+if _PKG_DIR not in sys.path:
+    sys.path.insert(0, _PKG_DIR)
+
 
 try:
     from .config import (
@@ -15,7 +20,7 @@ try:
     from .strategies.detectors import detect_all
     from .strategies.environment import EnvironmentCheck
     from .risk import RiskManager
-    from .executor import Executor
+    from execution.executor import Executor
     from .memory import Memory
     from .market_snapshot import get_market_snapshot
     from .signals import analyze
@@ -39,8 +44,8 @@ except ImportError:
     from strategies.detectors import detect_all
     from strategies.environment import EnvironmentCheck
     from risk import RiskManager
-    from executor import Executor
-    from memory import Memory
+    from execution.executor import Executor
+    from core_memory import Memory
     from market_snapshot import get_market_snapshot
     from signals import analyze
     from decision_memory import DecisionMemory

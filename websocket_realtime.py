@@ -10,15 +10,15 @@ import websocket
 from datetime import datetime, timezone, timedelta
 
 try:
-    from .config import PROXY
-    from .db.trades import TradeDB
-    from .executor import Executor
-    from .memory import Memory
+    from config import PROXY
+    from db.trades import TradeDB
+    from execution.executor import Executor
+    from core_memory import Memory
 except ImportError:
     from config import PROXY
     from db.trades import TradeDB
-    from executor import Executor
-    from memory import Memory
+    from execution.executor import Executor
+    from core_memory import Memory
 
 
 TZ_UTC8 = timezone(timedelta(hours=8))

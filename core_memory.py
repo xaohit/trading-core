@@ -5,8 +5,8 @@ Memory — 学习记忆层
 import json
 import threading
 try:
-    from .db.connection import get_db
-    from .config import STRATEGY_CONFIGS
+    from db.connection import get_db
+    from config import STRATEGY_CONFIGS
 except ImportError:
     from db.connection import get_db
     from config import STRATEGY_CONFIGS

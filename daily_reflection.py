@@ -9,9 +9,9 @@ from __future__ import annotations
 from collections import Counter
 
 try:
-    from .db.trades import TradeDB
-    from .decision_memory import DecisionMemory
-    from .semantic_radar import SemanticRadar
+    from db.trades import TradeDB
+    from memory.decision_memory import DecisionMemory
+    from semantic_radar import SemanticRadar
 except ImportError:
     from db.trades import TradeDB
     from decision_memory import DecisionMemory

@@ -10,8 +10,8 @@ This allows experience retrieval to match context (e.g., don't apply ranging les
 import math
 
 try:
-    from .market import Market
-    from .config import ATR_LOOKBACK
+    from market import Market
+    from config import ATR_LOOKBACK
 except ImportError:
     from market import Market
     from config import ATR_LOOKBACK
