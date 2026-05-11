@@ -176,21 +176,30 @@ Current high-level structure:
 
 ```text
 trading-core/
-  scanner.py              # Main autonomous scan/trade orchestrator
-  decision_pipeline.py    # Pre-trade deterministic filters
-  agent_decision.py       # Local decision gate for paper daemon mode
-  decision_provider.py    # Provider/router layer to be simplified
+  main.py                 # Daemon entry point (minute loop / --once)
+  scanner.py              # Core orchestrator: scan, route, execute, monitor
+  strategy_router.py      # Phase 4: per-regime adaptive signal weighting
+  market_regime.py        # Phase 4: trending/ranging/volatile state detection
+  market_state.py         # Deprecated — redirect shim to market_regime
+  market.py               # Market data: klines, tickers, funding (requests lib)
+  execution/executor.py   # Paper execution and position management
+  risk/risk.py            # Account and entry risk checks
+  strategies/
+    detectors.py          # Phase 3: trend-following signal detectors
+    environment.py        # 7-factor market environment scoring
+    narrative_radar.py    # Social heat / narrative-aware candidate pool
+  monitor/signal_engine.py # Phase 3: standalone reference signal engine
+  learning/
+    self_optimizer.py     # Per-regime parameter optimization (--apply mode)
+    experience_injector.py # Inject historical cases into new scans
+  memory/
+    decision_memory.py    # Decision snapshots, review, experience cases
+  reflection.py           # Strategy weighter + failure archive
   agent_tools.py          # External agent review/tool interface
-  decision_memory.py      # Decision snapshots, review, experience cases
-  self_optimizer.py       # Threshold diagnostics and suggestions
-  market_snapshot.py      # Futures market snapshot
-  signals.py              # Market scoring and tags
-  ta_checker.py           # Technical and R/R validation
-  executor.py             # Paper execution and position management
-  risk.py                 # Account and entry risk checks
-  backtest.py             # Backtesting engine
-  semantic_radar.py       # External semantic event inbox
-  web.py                  # Web UI
+  agent_decision.py       # Local decision gate for paper daemon mode
+  config.py               # Configuration (API keys via env vars)
+  db/                     # SQLite: trades, signals, snapshots, cases, klines
+  deep_review.py          # Hermes-authored post-trade deep analysis
   docs/                   # Architecture, plans, handoff notes
   tests/                  # Smoke tests
 ```
@@ -242,23 +251,24 @@ python tests/smoke_phase7a.py
 
 Working:
 
-- Paper-trading autonomous loop
-- Web UI for observation and manual controls
-- Market radar and seed strategy signals
-- Risk and quality gates
-- Paper execution with TP/SL/trailing logic
-- Decision memory and experience archive
+- Paper-trading autonomous loop (daemon + --once)
+- Phase 3 trend-following detectors (MA + ADX + funding rate)
+- Phase 4 adaptive strategy router (per-regime weighting from state.json)
+- Market regime detection (trending / ranging / volatile)
+- Risk-based sizing with ATR stop distance
+- TP1/TP2 partial take-profit + trailing stop
+- Decision memory and experience archive (838 snapshots, 847 cases)
+- Deep review by Hermes agent (per-trade analysis, scoring, improvement tags)
 - Agent-facing review/reflection tools
-- Self-Optimizer diagnostics
+- Self-Optimizer diagnostics with --apply mode
 
 Still needs work:
 
-- Simplify old skill-vs-agent terminology
-- Make the Web UI the complete operating console
-- Make radar modules more explicit and modular
-- Build profit attribution reports
-- Add enough paper-trading samples before trusting optimization
-- Add a live-trading safety gate before any real exchange execution
+- More paper-trading samples (8 closed trades — need 10 for first evolution trigger)
+- Backtesting to validate parameter changes
+- Daemon heartbeat monitoring
+- Profit attribution reports
+- Live-trading safety gate
 - Expand tests beyond smoke coverage
 
 ## Safety
