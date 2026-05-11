@@ -26,15 +26,19 @@ try:
     from market import Market
     from decision_memory import DecisionMemory
     from config import BASE_DIR, STATE_PATH
+    from db.connection import get_db, init_db
 except ImportError:
-    print("请在 trading-core 目录下运行")
-    sys.exit(1)
+    from market import Market
+    from decision_memory import DecisionMemory
+    from config import BASE_DIR, STATE_PATH
+    from db.connection import get_db, init_db
 
 
 # ============================================================
 # 调参阈值
 # ============================================================
 MIN_SAMPLE = 10          # 最少样本量才开始调参
+MIN_REGIME_SAMPLE = 5    # per-regime 分析最低样本
 CORRECT_RATE_TIGHTEN = 0.85   # 正确率 > 85% → 可收紧
 CORRECT_RATE_LOOSEN = 0.40    # 正确率 < 40% → 需放宽
 ADJUST_STEP = 0.20           # 每次调整幅度 20%
@@ -370,6 +374,162 @@ def _num(v, default=0.0):
 
 
 # ============================================================
+# Per-Regime 胜率分析
+# ============================================================
+def analyze_per_regime(decisions: list[dict]) -> dict:
+    """
+    按市场状态分组，统计各策略在不同 regime 下的胜率。
+    输出：
+        {
+          "trending": {
+            "neg_funding_long": {"wins": 3, "total": 5, "win_rate": 0.60, "avg_pnl": 0.08},
+            ...
+          },
+          "ranging": {...},
+          ...
+        }
+    """
+    import json
+    buckets: dict = {}
+
+    for d in decisions:
+        market_state_str = d.get("market_state") or "{}"
+        try:
+            ms = json.loads(market_state_str) if isinstance(market_state_str, str) else market_state_str
+        except Exception:
+            ms = {}
+
+        # 归一化 regime 名称（兼容新旧格式）
+        state = ms.get("state", "unknown")
+        if state == "trending":
+            trend_dir = ms.get("trend_direction", "neutral")
+            regime_key = f"trending_{trend_dir}"
+        elif state == "volatile":
+            regime_key = "volatile"
+        elif state == "ranging":
+            regime_key = "ranging"
+        else:
+            regime_key = "unknown"
+
+        signal_type = d.get("signal_type", "unknown")
+        pnl_pct = _num(d.get("pnl_pct"), 0) or 0
+        action = d.get("action", "")
+        direction = d.get("direction", "")
+
+        # 判断盈亏（opened 决策没有 pnl，以后的 decision_outcomes 为准）
+        is_win = (pnl_pct > 0) if pnl_pct != 0 else None
+
+        # 从 decision_outcomes 补充（opened 决策）
+        if is_win is None and d.get("id"):
+            outcome = _get_outcome(d["id"])
+            if outcome is not None:
+                is_win = outcome
+
+        if regime_key not in buckets:
+            buckets[regime_key] = {}
+        bucket = buckets[regime_key]
+
+        if signal_type not in bucket:
+            bucket[signal_type] = {"wins": 0, "total": 0, "pnl_sum": 0.0}
+
+        if is_win is not None:
+            bucket[signal_type]["total"] += 1
+            bucket[signal_type]["wins"] += 1 if is_win else 0
+            bucket[signal_type]["pnl_sum"] += pnl_pct
+
+    # 汇总统计
+    result = {}
+    for regime, strategies in buckets.items():
+        result[regime] = {}
+        for sig, s in strategies.items():
+            total = s["total"]
+            result[regime][sig] = {
+                "wins": s["wins"],
+                "total": total,
+                "win_rate": round(s["wins"] / total, 4) if total > 0 else 0,
+                "avg_pnl": round(s["pnl_sum"] / total, 4) if total > 0 else 0,
+            }
+    return result
+
+
+def _get_outcome(snapshot_id: int) -> bool | None:
+    """从 decision_outcomes 查 24h 结果"""
+    try:
+        init_db()
+        conn = get_db()
+        c = conn.cursor()
+        c.execute(
+            "SELECT direction_correct FROM decision_outcomes WHERE snapshot_id=? LIMIT 1",
+            (snapshot_id,),
+        )
+        row = c.fetchone()
+        if row is None:
+            return None
+        return bool(row[0])
+    except Exception:
+        return None
+
+
+def regime_weight_suggestions(per_regime: dict) -> dict:
+    """
+    根据 per-regime 胜率生成策略权重调整建议。
+    返回 {regime: {strategy: {"current": 0.5, "suggested": 0.8, "reason": "..."}}}
+    """
+    # 默认权重（来自 strategy_router DEFAULT_WEIGHTS）
+    defaults = {
+        "trending_up": {
+            "neg_funding_long": 1.0,
+            "pos_funding_short": 0.0,
+            "crash_bounce_long": 0.8,
+            "pump_short": 0.0,
+        },
+        "trending_down": {
+            "neg_funding_long": 0.0,
+            "pos_funding_short": 1.0,
+            "crash_bounce_long": 0.0,
+            "pump_short": 0.8,
+        },
+        "ranging": {
+            "neg_funding_long": 1.0,
+            "pos_funding_short": 1.0,
+            "crash_bounce_long": 1.0,
+            "pump_short": 1.0,
+        },
+    }
+
+    suggestions = {}
+    for regime, strategies in per_regime.items():
+        if regime == "unknown":
+            continue
+        defaults_for_regime = defaults.get(regime, {})
+        regime_suggestions = {}
+        for sig, stats in strategies.items():
+            if stats["total"] < MIN_REGIME_SAMPLE:
+                continue
+            current_w = defaults_for_regime.get(sig, 0.5)
+            win_rate = stats["win_rate"]
+            # 胜率 > 60% → 建议加权重；胜率 < 40% → 建议降权重
+            if win_rate >= 0.60:
+                suggested_w = min(current_w * 1.3, 1.0)
+                reason = f"胜率{win_rate:.0%}表现好，建议加权重"
+            elif win_rate <= 0.35:
+                suggested_w = max(current_w * 0.5, 0.0)
+                reason = f"胜率{win_rate:.0%}表现差，建议降权重"
+            else:
+                continue  # 正常范围不动
+            regime_suggestions[sig] = {
+                "current": current_w,
+                "suggested": round(suggested_w, 3),
+                "win_rate": win_rate,
+                "n": stats["total"],
+                "reason": reason,
+            }
+        if regime_suggestions:
+            suggestions[regime] = regime_suggestions
+    return suggestions
+
+
+# ============================================================
 # 主流程
 # ============================================================
 def run(dry_run: bool = True) -> dict:
@@ -421,7 +581,36 @@ def run(dry_run: bool = True) -> dict:
         print(f"     当前值: {s['old']} → 新值: {s['new']}")
         print(f"     原因: {s['reason']}")
 
-    # 4. 应用
+    # 4. Per-regime 胜率分析（Phase 4 新增）
+    print(f"\n[4] Per-Regime 策略胜率分析...")
+    per_regime = analyze_per_regime(decisions)
+    if per_regime:
+        for regime, strategies in per_regime.items():
+            print(f"\n  【{regime}】")
+            has_data = False
+            for sig, stats in strategies.items():
+                n = stats["total"]
+                if n < MIN_REGIME_SAMPLE:
+                    continue
+                has_data = True
+                wr = stats["win_rate"]
+                bar = "█" * int(wr * 10) + "░" * (10 - int(wr * 10))
+                print(f"    {sig:<22} {bar} {wr:.0%} ({stats['wins']}/{n})  avg={stats['avg_pnl']:+.2f}%")
+            if not has_data:
+                print(f"    样本不足（每策略需>{MIN_REGIME_SAMPLE}笔）")
+        # 权重建议
+        weight_sugs = regime_weight_suggestions(per_regime)
+        if weight_sugs:
+            print(f"\n  权重调整建议：")
+            for regime, sigs in weight_sugs.items():
+                print(f"  【{regime}】")
+                for sig, sug in sigs.items():
+                    emoji = "🟢" if sug["suggested"] > sug["current"] else "🔴"
+                    print(f"    {emoji} {sig}: {sug['current']:.1f} → {sug['suggested']:.1f} ({sug['reason']})")
+    else:
+        print("  样本不足，无法分析")
+
+    # 5. 应用
     if dry_run:
         print(f"\n⚠️  [dry-run] 使用 --apply 来实际保存新阈值")
     else:
@@ -429,6 +618,30 @@ def run(dry_run: bool = True) -> dict:
         for key, s in suggestions.items():
             current[s["threshold_key"]] = s["new"]
         save_thresholds(current)
+
+        # 5b. 保存 regime 权重到 state.json（Phase 4）
+        from strategy_router import StrategyRouter
+        from market_regime import Regime
+        # 加载当前已保存的 regime_weights（不覆盖全局，只更新有建议的策略）
+        try:
+            import json as _json
+            state_path = Path.home() / ".hermes/trading_core/state.json"
+            if state_path.exists():
+                state_data = _json.loads(state_path.read_text())
+            else:
+                state_data = {}
+            existing = state_data.get("regime_weights", {})
+            # 合并：旧的保留，有新建议的覆盖
+            for regime_key, sigs in weight_sugs.items():
+                if regime_key not in existing:
+                    existing[regime_key] = {}
+                for sig, sug in sigs.items():
+                    existing[regime_key][sig] = sug["suggested"]
+            state_data["regime_weights"] = existing
+            state_path.write_text(_json.dumps(state_data, indent=2, ensure_ascii=False))
+            print(f"\n✅ regime_weights 已保存到 state.json")
+        except Exception as e:
+            print(f"\n⚠️  regime_weights 保存失败: {e}")
 
     return {"ok": True, "accuracy": accuracy, "suggestions": suggestions}
 
